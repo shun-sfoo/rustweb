@@ -2,6 +2,9 @@
 
 ## Web
 
+cargo install cargo-edit
+cargo install cargo-watch
+
 ## App
 
 yarn global add typescript-language-server typescript
