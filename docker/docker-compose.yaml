@@ -22,7 +22,8 @@ services:
     networks:
       - backend
     restart: always
-mysql-manage:
+
+  mysql-manage:
     build:
       context: ./mysql-manage
     environment:
@@ -40,3 +41,4 @@ mysql-manage:
     networks:
       - backend
     restart: always
+

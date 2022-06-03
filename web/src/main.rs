@@ -5,7 +5,7 @@ use axum::{
     Extension, Router,
 };
 use sea_orm::Database;
-use service::{me, register};
+use service::{file_list, me, register};
 
 mod db;
 mod model;
@@ -28,12 +28,14 @@ async fn main() {
     let _ = crate::db::create_user_table(&conn).await;
     let _ = crate::db::create_file_table(&conn).await;
 
+    //TODO upload download
     let app = Router::new()
         .route("/register", post(register))
         .route("/me", get(me))
+        .route("/list", post(file_list))
         .layer(Extension(conn));
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 9000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use axum::{extract::Query, Extension, Json};
+use axum::{extract::Query, response::IntoResponse, Extension, Json};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, DbConn, EntityTrait, PaginatorTrait, QueryFilter,
     QueryOrder, Set,
@@ -26,8 +26,8 @@ pub struct FileParams {
     page: Option<usize>,
     posts_per_page: Option<usize>,
     filename: Option<String>,
-    update_begin: Option<String>,
-    upload_end: Option<String>,
+    upload_time_begin: Option<String>,
+    upload_time_end: Option<String>,
 }
 
 pub async fn register(
@@ -56,33 +56,52 @@ pub async fn register(
     }))
 }
 
+#[derive(Serialize, Debug)]
+pub struct FileListResponse {
+    file_name: String,
+    update_time: String,
+    operator: String,
+    size: u32,
+}
+
 pub async fn file_list(
     _claims: Claims,
     Query(params): Query<FileParams>,
     Extension(ref conn): Extension<DbConn>,
-) {
+) -> impl IntoResponse {
     use crate::db::file::Column;
 
     let page = params.page.unwrap_or(1);
     let posts_per_page = params.posts_per_page.unwrap_or(20);
     let mut conditions = Condition::all();
+    // TODO find a way to search update time start and end
     if let Some(name) = params.filename {
-        conditions.add(Column::Name.like(&name));
+        conditions = conditions.add(Column::Name.like(&name));
     }
 
-    // if params.update_begin.is_some() && params.update_begin.is_some() {
-    //     conditions.add(
-    //         Column::UploadTime.between(params.update_begin.unwrap(), params.upload_end.unwrap()),
-    //     );
-    // }
-    //
-
     let paginator = crate::db::file::Entity::find()
-        // .filter()
+        .filter(conditions)
         .order_by_asc(Column::UploadTime)
         .paginate(conn, posts_per_page);
 
-    todo!()
+    let _num_pages = paginator.num_pages().await.ok().unwrap();
+
+    let lists = paginator
+        .fetch_page(page - 1)
+        .await
+        .expect("could not retrieve posts");
+
+    let mut result = Vec::new();
+    for m in lists {
+        result.push(FileListResponse {
+            file_name: m.name,
+            update_time: m.upload_time.to_string(),
+            operator: m.operator,
+            size: m.size,
+        });
+    }
+
+    return Json(result);
 }
 
 pub async fn me(claims: Claims, Extension(ref conn): Extension<DbConn>) -> Json<Option<User>> {
