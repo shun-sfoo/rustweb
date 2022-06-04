@@ -18,3 +18,13 @@ qs
 @types/qs
 @emotion/react
 @emotion/styled
+
+### Antd design
+
+[link](https://ant.design/docs/react/use-in-typescript-cn)
+
+1. yarn add antd
+
+2. import css
+   vim src/App.css
+   `@import '~antd/dist/antd.css';`

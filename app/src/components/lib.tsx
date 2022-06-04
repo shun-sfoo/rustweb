@@ -1,4 +1,3 @@
-import React from 'react';
 import styled from '@emotion/styled';
 
 export const Row = styled.div<{
@@ -6,9 +5,10 @@ export const Row = styled.div<{
   between?: boolean;
   marginBottom?: number;
 }>`
+  display: flex;
   align-items: center;
-  justify-content: ${(props) => (props.between ? 'space-between' : undefined)};
-  margin_bottom: ${(props) => props.marginBottom + 'rem'};
+  justify-content: ${(props) => (props.between ? 'space-betwen' : undefined)};
+  margin-bttom: ${(props) => props.marginBottom + 'rem'};
   > * {
     margin-top: 0 !important;
     margin-bottom: 0 !important;

@@ -1,5 +1,6 @@
 import qs from 'qs';
 import * as auth from 'auth-provider';
+import { useAuth } from 'context/auth-context';
 const apiUrl = process.env.REACT_APP_API_URL;
 
 interface Config extends RequestInit {
@@ -30,12 +31,12 @@ export const http = async (
   return window
     .fetch(`${apiUrl}/${endpoint}`, config)
     .then(async (response) => {
+      // unauthorize to logout
       if (response.status === 401) {
         await auth.logout();
         window.location.reload();
         return Promise.reject({ message: `请求${endpoint}失败,请重新登录` });
       }
-
       const data = await response.json();
       if (response.ok) {
         return data;
@@ -55,9 +56,6 @@ export const useHttp = () => {
     http(endpoint, { ...config, token: user?.token });
 };
 
-function useAuth(): { user: any } {
-  throw new Error('Function not implemented.');
-}
 // 联合类型
 // sting | number
 

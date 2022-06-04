@@ -1,22 +1,54 @@
 import React from 'react';
 import styled from '@emotion/styled';
+import { Row } from 'components/lib';
 import { useAuth } from 'context/auth-context';
-import { Row } from './components/lib';
-import { Button, Dropdown, Menu } from 'antd';
+import { PayloadListScreen } from 'screens/payload-list';
+import { ProjectListScreen } from 'screens/project-list';
+import { ReactComponent as Logo } from 'assets/dmp.svg';
+import { Button, Dropdown, Menu, Upload, message } from 'antd';
+import { UploadOutlined } from '@ant-design/icons';
+import { UploadFile } from 'antd/lib/upload/interface';
 
 export const AuthenticatedApp = () => {
   return (
     <Container>
-      <PageHeader></PageHeader>
+      <PageHeader />
+      <Main>
+        <PayloadListScreen />
+      </Main>
     </Container>
   );
+};
+
+const apiUrl = process.env.REACT_APP_API_URL;
+
+const props: any = {
+  maxCount: 1,
+  action: `${apiUrl}/neo_upload_json`,
+  beforeUpload: (file: UploadFile) => {
+    const isJson = file.type === 'application/json';
+    if (!isJson) {
+      message.error(`${file.name} is not a json file`);
+    }
+    return isJson || Upload.LIST_IGNORE;
+  },
+
+  onchange(info: any) {
+    if (info.response.ok) {
+      message.success(info.reponse.data);
+    }
+  },
 };
 
 const PageHeader = () => {
   const { logout, user } = useAuth();
   return (
     <Header between={true}>
-      <HeaderLeft gap={true}></HeaderLeft>
+      <HeaderLeft gap={true}>
+        <Upload {...props}>
+          <Button icon={<UploadOutlined />}>Click to Upload</Button>
+        </Upload>
+      </HeaderLeft>
       <HeaderRight>
         <Dropdown
           overlay={
@@ -30,7 +62,7 @@ const PageHeader = () => {
           }
         >
           <Button onClick={(e) => e.preventDefault()}>
-            你好，{user?.username}
+            你好，{user?.name}
           </Button>
         </Dropdown>
       </HeaderRight>
