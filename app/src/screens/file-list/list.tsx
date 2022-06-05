@@ -2,13 +2,14 @@ import React from 'react';
 import { Table } from 'antd';
 import styled from '@emotion/styled';
 import { User } from 'screens/project-list/search-panel';
+import dayjs from 'dayjs';
 
 interface File {
   id: string;
   name: string;
-  size: string;
+  size: number;
   operator: string;
-  uploadTime: string;
+  uploadTime: number;
 }
 
 interface ListProps {
@@ -28,10 +29,10 @@ export const List = ({ users, list }: ListProps) => {
         },
         {
           title: '上传者',
-          render(value, file) {
+          render(_, record) {
             return (
               <span>
-                {users.find((user) => user.id === file.operator)?.name ||
+                {users.find((user) => user.id === record.operator)?.name ||
                   '未知'}
               </span>
             );
@@ -40,6 +41,20 @@ export const List = ({ users, list }: ListProps) => {
         {
           title: '文件大小',
           dataIndex: 'size',
+        },
+        {
+          title: '上传时间',
+          render(_, record) {
+            return (
+              <span>
+                {record.uploadTime
+                  ? dayjs(record.uploadTime * 1000).format(
+                      'YYYY-MM-DD hh:mm:ss'
+                    )
+                  : '无'}
+              </span>
+            );
+          },
         },
       ]}
       dataSource={list}

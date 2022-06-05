@@ -27,7 +27,7 @@ export const FileListScreen = () => {
   }, [debounceParam]);
 
   useMount(() => {
-    client('users').then(setList);
+    client('users').then(setUsers);
   });
 
   return (

@@ -26,13 +26,13 @@ pub struct UserResponse {
     pub user: User,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct FileParams {
     page: Option<usize>,
     posts_per_page: Option<usize>,
-    filename: Option<String>,
-    upload_time_begin: Option<String>,
-    upload_time_end: Option<String>,
+    name: Option<String>,
+    uploadTimeBegin: Option<String>,
+    uploadTimeEnd: Option<String>,
 }
 
 pub async fn register(
@@ -109,7 +109,7 @@ pub async fn users(Extension(ref conn): Extension<DbConn>) -> impl IntoResponse 
 #[derive(Serialize, Debug)]
 pub struct FileListResponse {
     name: String,
-    update_time: String,
+    uploadTime: String,
     operator: String,
     size: u32,
 }
@@ -119,6 +119,7 @@ pub async fn file_list(
     Query(params): Query<FileParams>,
     Extension(ref conn): Extension<DbConn>,
 ) -> impl IntoResponse {
+    debug!(?params);
     use crate::db::file::Column;
 
     let page = params.page.unwrap_or(1);
@@ -126,8 +127,8 @@ pub async fn file_list(
     let mut conditions = Condition::all();
     // TODO find a way to search update time start and end
     conditions = conditions.add(Column::IsDelete.eq(0));
-    if let Some(name) = params.filename {
-        conditions = conditions.add(Column::Name.like(&name));
+    if let Some(name) = params.name {
+        conditions = conditions.add(Column::Name.like(&format!("%{}%", &name)));
     }
 
     let paginator = crate::db::file::Entity::find()
@@ -146,7 +147,7 @@ pub async fn file_list(
     for m in lists {
         result.push(FileListResponse {
             name: m.name,
-            update_time: m.upload_time.to_string(),
+            uploadTime: m.upload_time.to_string(),
             operator: m.operator,
             size: m.size,
         });
