@@ -2,9 +2,7 @@ import React from 'react';
 import styled from '@emotion/styled';
 import { Row } from 'components/lib';
 import { useAuth } from 'context/auth-context';
-import { PayloadListScreen } from 'screens/payload-list';
-import { ProjectListScreen } from 'screens/project-list';
-import { ReactComponent as Logo } from 'assets/dmp.svg';
+import { ReactComponent as SoftwareLogo } from 'assets/tail.svg';
 import { Button, Dropdown, Menu, Upload, message } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { UploadFile } from 'antd/lib/upload/interface';
@@ -45,6 +43,7 @@ const PageHeader = () => {
   const { logout, user } = useAuth();
   return (
     <Header between={true}>
+      <SoftwareLogo width={'18rem'} color={'rgb(38, 132, 255)'} />
       <HeaderLeft gap={true}>
         <Upload {...props}>
           <Button icon={<UploadOutlined />}>Click to Upload</Button>
@@ -62,7 +61,7 @@ const PageHeader = () => {
             </Menu>
           }
         >
-          <Button onClick={(e) => e.preventDefault()}>
+          <Button type={'link'} onClick={(e) => e.preventDefault()}>
             你好，{user?.name}
           </Button>
         </Dropdown>

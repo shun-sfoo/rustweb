@@ -39,7 +39,7 @@ export const List = ({ users, list }: ListProps) => {
           },
         },
         {
-          tilte: '组织',
+          title: '部门',
           dataIndex: 'organization',
         },
       ]}

@@ -9,7 +9,7 @@ pub struct Model {
     pub size: u32,
     pub location: String,
     pub operator: String,
-    pub upload_time: DateTime,
+    pub upload_time: i64,
     pub is_delete: bool,
 }
 

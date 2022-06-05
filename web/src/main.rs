@@ -6,7 +6,7 @@ use axum::{
     Extension, Router,
 };
 use sea_orm::Database;
-use service::{file_list, login, me, register};
+use service::{file_list, login, me, register, upload, users};
 use tower_http::cors::{Any, CorsLayer};
 
 mod db;
@@ -43,7 +43,9 @@ async fn main() {
         .route("/register", post(register))
         .route("/login", post(login))
         .route("/me", get(me))
-        .route("/file_list", post(file_list))
+        .route("/file_list", get(file_list))
+        .route("/upload", post(upload))
+        .route("/users", get(users))
         .layer(Extension(conn))
         .layer(cors);
 

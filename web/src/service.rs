@@ -1,11 +1,16 @@
 use std::collections::HashMap;
 
-use axum::{extract::Query, response::IntoResponse, Extension, Json};
+use axum::{
+    extract::{Multipart, Query},
+    response::IntoResponse,
+    Extension, Json,
+};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, DbConn, EntityTrait, PaginatorTrait, QueryFilter,
     QueryOrder, Set,
 };
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 use crate::model::claims::Claims;
 
@@ -87,16 +92,30 @@ pub async fn login(
     Err("No user")
 }
 
+pub async fn users(Extension(ref conn): Extension<DbConn>) -> impl IntoResponse {
+    let users = crate::db::user::Entity::find().all(conn).await.unwrap();
+    let mut user_list = Vec::new();
+
+    for u in users {
+        user_list.push(User {
+            id: u.id,
+            name: u.name,
+            token: None,
+        });
+    }
+    Json(user_list)
+}
+
 #[derive(Serialize, Debug)]
 pub struct FileListResponse {
-    file_name: String,
+    name: String,
     update_time: String,
     operator: String,
     size: u32,
 }
 
 pub async fn file_list(
-    _claims: Claims,
+    // _claims: Claims,
     Query(params): Query<FileParams>,
     Extension(ref conn): Extension<DbConn>,
 ) -> impl IntoResponse {
@@ -106,6 +125,7 @@ pub async fn file_list(
     let posts_per_page = params.posts_per_page.unwrap_or(20);
     let mut conditions = Condition::all();
     // TODO find a way to search update time start and end
+    conditions = conditions.add(Column::IsDelete.eq(0));
     if let Some(name) = params.filename {
         conditions = conditions.add(Column::Name.like(&name));
     }
@@ -125,7 +145,7 @@ pub async fn file_list(
     let mut result = Vec::new();
     for m in lists {
         result.push(FileListResponse {
-            file_name: m.name,
+            name: m.name,
             update_time: m.upload_time.to_string(),
             operator: m.operator,
             size: m.size,
@@ -153,5 +173,56 @@ pub async fn me(
             },
         })),
         None => Json(None),
+    }
+}
+
+pub async fn upload(
+    claims: Claims,
+    mut multipart: Multipart,
+    Extension(ref conn): Extension<DbConn>,
+) {
+    let id = claims.id;
+    if let Some(field) = multipart.next_field().await.unwrap() {
+        debug!(?field);
+        debug!(?claims);
+        let name = field.file_name().unwrap().to_string();
+        let size = field.bytes().await.unwrap().len() as u32;
+        debug!(?name);
+        debug!(?size);
+
+        use crate::db::file::Column;
+
+        let res = crate::db::file::Entity::find()
+            .filter(
+                Condition::all()
+                    .add(Column::Name.eq(name.clone()))
+                    .add(Column::Size.eq(size)),
+            )
+            .one(conn)
+            .await
+            .unwrap();
+
+        use std::time::SystemTime;
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        if let None = res {
+            let model = crate::db::file::ActiveModel {
+                name: Set(name),
+                size: Set(size),
+                is_delete: Set(false),
+                operator: Set(id.to_string()),
+                location: Set("where".to_string()),
+                upload_time: Set(now),
+                ..Default::default()
+            };
+
+            crate::db::file::Entity::insert(model)
+                .exec(conn)
+                .await
+                .unwrap();
+        }
     }
 }

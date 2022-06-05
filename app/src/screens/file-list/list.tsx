@@ -7,7 +7,7 @@ interface File {
   id: string;
   name: string;
   size: string;
-  operatorId: string;
+  operator: string;
   uploadTime: string;
 }
 
@@ -31,7 +31,7 @@ export const List = ({ users, list }: ListProps) => {
           render(value, file) {
             return (
               <span>
-                {users.find((user) => user.id === file.operatorId)?.name ||
+                {users.find((user) => user.id === file.operator)?.name ||
                   '未知'}
               </span>
             );
