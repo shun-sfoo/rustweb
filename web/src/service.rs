@@ -12,7 +12,7 @@ use crate::model::claims::Claims;
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct User {
     pub id: i32,
-    pub username: String,
+    pub name: String,
     pub token: Option<String>,
 }
 
@@ -50,10 +50,41 @@ pub async fn register(
     Ok(Json(UserResponse {
         user: User {
             id: model.id,
-            username: model.name,
+            name: model.name,
             token: Some(token),
         },
     }))
+}
+
+pub async fn login(
+    Json(data): Json<HashMap<String, String>>,
+    Extension(ref conn): Extension<DbConn>,
+) -> Result<Json<UserResponse>, &'static str> {
+    use crate::db::user::Column;
+
+    let name = data.get("username").unwrap().to_string();
+    let password = data.get("password").unwrap().to_string();
+
+    let user = crate::db::user::Entity::find()
+        .filter(
+            Condition::all()
+                .add(Column::Name.eq(name))
+                .add(Column::Password.eq(password)),
+        )
+        .one(conn)
+        .await
+        .unwrap();
+
+    if let Some(user) = user {
+        return Ok(Json(UserResponse {
+            user: User {
+                id: user.id,
+                name: user.name.clone(),
+                token: Some(Claims::new(user.id, user.name).generate()),
+            },
+        }));
+    };
+    Err("No user")
 }
 
 #[derive(Serialize, Debug)]
@@ -104,17 +135,22 @@ pub async fn file_list(
     return Json(result);
 }
 
-pub async fn me(claims: Claims, Extension(ref conn): Extension<DbConn>) -> Json<Option<User>> {
+pub async fn me(
+    claims: Claims,
+    Extension(ref conn): Extension<DbConn>,
+) -> Json<Option<UserResponse>> {
     let id = claims.id;
     match crate::db::user::Entity::find_by_id(id)
         .one(conn)
         .await
         .unwrap()
     {
-        Some(m) => Json(Some(User {
-            id: m.id,
-            username: m.name,
-            token: None,
+        Some(m) => Json(Some(UserResponse {
+            user: User {
+                id: m.id,
+                name: m.name,
+                token: None,
+            },
         })),
         None => Json(None),
     }

@@ -9,6 +9,7 @@ interface Project {
   personId: string;
   pin: boolean;
   organization: string;
+  created: number;
 }
 
 interface ListProps {
@@ -36,6 +37,10 @@ export const List = ({ users, list }: ListProps) => {
               </span>
             );
           },
+        },
+        {
+          tilte: '组织',
+          dataIndex: 'organization',
         },
       ]}
       dataSource={list}

@@ -1,16 +1,16 @@
+import styled from '@emotion/styled';
 import React from 'react';
 import { useEffect, useState } from 'react';
-import * as qs from 'qs';
 import { cleanObject, useDebounce, useMount } from 'utils';
-import { SearchPanel } from './search-panel';
-import { List } from './list';
 import { useHttp } from 'utils/http';
-import styled from '@emotion/styled';
+import { List } from './list';
+import { SearchPanel } from './search-panel';
 
-export const ProjectListScreen = () => {
+export const FileListScreen = () => {
   const [param, setParam] = useState({
     name: '',
-    personId: '',
+    uploadTimeBegin: '',
+    uploadTimeEnd: '',
   });
 
   const [list, setList] = useState([]);
@@ -23,21 +23,17 @@ export const ProjectListScreen = () => {
   // 发送请求，依赖于param，param发生改变访问获得json
   useEffect(() => {
     // client('project', cleanObject(debounceParam))
-    client('projects', { data: cleanObject(debounceParam) }).then(setList);
+    client('file_list', { data: cleanObject(debounceParam) }).then(setList);
   }, [debounceParam]);
 
   useMount(() => {
-    client('users').then(setUsers);
+    client('file_list').then(setList);
   });
 
   return (
     <Container>
       <h1>文件列表</h1>
-      <SearchPanel
-        users={users}
-        param={param}
-        setParam={setParam}
-      ></SearchPanel>
+      <SearchPanel param={param} setParam={setParam}></SearchPanel>
       <List users={users} list={list} />
     </Container>
   );

@@ -8,13 +8,14 @@ import { ReactComponent as Logo } from 'assets/dmp.svg';
 import { Button, Dropdown, Menu, Upload, message } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { UploadFile } from 'antd/lib/upload/interface';
+import { FileListScreen } from 'screens/file-list';
 
 export const AuthenticatedApp = () => {
   return (
     <Container>
       <PageHeader />
       <Main>
-        <PayloadListScreen />
+        <FileListScreen />
       </Main>
     </Container>
   );

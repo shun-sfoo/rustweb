@@ -1,11 +1,13 @@
 use std::{env, net::SocketAddr};
 
 use axum::{
+    http::Method,
     routing::{get, post},
     Extension, Router,
 };
 use sea_orm::Database;
-use service::{file_list, me, register};
+use service::{file_list, login, me, register};
+use tower_http::cors::{Any, CorsLayer};
 
 mod db;
 mod model;
@@ -28,12 +30,22 @@ async fn main() {
     let _ = crate::db::create_user_table(&conn).await;
     let _ = crate::db::create_file_table(&conn).await;
 
+    let cors = CorsLayer::new()
+        // allow `GET` and `POST` when accessing the resource
+        .allow_methods(vec![Method::GET, Method::POST])
+        // allow requests from any origin
+        // .allow_origin(Origin::exact("http://localhost:3000".parse().unwrap()));
+        .allow_origin(Any)
+        .allow_headers(Any);
+
     //TODO upload download
     let app = Router::new()
         .route("/register", post(register))
+        .route("/login", post(login))
         .route("/me", get(me))
-        .route("/list", post(file_list))
-        .layer(Extension(conn));
+        .route("/file_list", post(file_list))
+        .layer(Extension(conn))
+        .layer(cors);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     axum::Server::bind(&addr)

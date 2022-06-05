@@ -5,6 +5,11 @@
 cargo install cargo-edit
 cargo install cargo-watch
 
+### cors
+
+一步一步解决异步跨域请求 CORS（跨域资源共享）报错
+https://devnote.pro/posts/10000003471151
+
 ## App
 
 yarn global add typescript-language-server typescript
@@ -28,3 +33,13 @@ qs
 2. import css
    vim src/App.css
    `@import '~antd/dist/antd.css';`
+
+### datepicker locale
+
+yarn add moment
+
+```typescript
+import 'moment/locale/zh-cn';
+import locale from 'antd/es/date-picker/locale/zh_CN';
+<DatePicker locale={locale} />;
+```
