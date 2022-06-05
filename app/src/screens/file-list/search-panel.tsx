@@ -9,6 +9,7 @@ import {
 import 'moment/locale/zh-cn';
 import locale from 'antd/es/date-picker/locale/zh_CN';
 import { getToken } from 'auth-provider';
+import dayjs from 'dayjs';
 
 const apiUrl = process.env.REACT_APP_API_URL;
 
@@ -35,8 +36,8 @@ const { RangePicker } = DatePicker;
 interface SearchPanelProps {
   param: {
     name: string;
-    uploadTimeBegin: string;
-    uploadTimeEnd: string;
+    uploadTimeBegin: number;
+    uploadTimeEnd: number;
   };
   setParam: (param: SearchPanelProps['param']) => void;
 }
@@ -64,8 +65,8 @@ export const SearchPanel = ({ param, setParam }: SearchPanelProps) => {
             console.log('dataString', dateString);
             setParam({
               ...param,
-              uploadTimeBegin: dateString[0],
-              uploadTimeEnd: dateString[1],
+              uploadTimeBegin: dayjs(dateString[0] + ' 00:00:00').unix(),
+              uploadTimeEnd: dayjs(dateString[1] + ' 24:00:00').unix(),
             });
           }}
         />

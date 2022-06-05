@@ -49,7 +49,7 @@ export const List = ({ users, list }: ListProps) => {
               <span>
                 {record.uploadTime
                   ? dayjs(record.uploadTime * 1000).format(
-                      'YYYY-MM-DD hh:mm:ss'
+                      'YYYY-MM-DD HH:mm:ss'
                     )
                   : '无'}
               </span>

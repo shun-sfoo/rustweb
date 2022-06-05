@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, env, io::Write};
 
 use axum::{
     extract::{Multipart, Query},
@@ -10,6 +10,7 @@ use sea_orm::{
     QueryOrder, Set,
 };
 use serde::{Deserialize, Serialize};
+use tokio::task_local;
 use tracing::debug;
 
 use crate::model::claims::Claims;
@@ -31,8 +32,18 @@ pub struct FileParams {
     page: Option<usize>,
     posts_per_page: Option<usize>,
     name: Option<String>,
-    uploadTimeBegin: Option<String>,
-    uploadTimeEnd: Option<String>,
+    #[serde(rename(deserialize = "uploadTimeBegin"))]
+    upload_time_begin: Option<i64>,
+    #[serde(rename(deserialize = "uploadTimeEnd"))]
+    upload_time_end: Option<i64>,
+}
+
+fn get_epoch() -> i64 {
+    use std::time::SystemTime;
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64
 }
 
 pub async fn register(
@@ -109,7 +120,8 @@ pub async fn users(Extension(ref conn): Extension<DbConn>) -> impl IntoResponse 
 #[derive(Serialize, Debug)]
 pub struct FileListResponse {
     name: String,
-    uploadTime: String,
+    #[serde(rename = "uploadTime")]
+    upload_time: String,
     operator: String,
     size: u32,
 }
@@ -131,6 +143,11 @@ pub async fn file_list(
         conditions = conditions.add(Column::Name.like(&format!("%{}%", &name)));
     }
 
+    conditions = conditions.add(Column::UploadTime.between(
+        params.upload_time_begin.unwrap_or(0),
+        params.upload_time_end.unwrap_or(get_epoch()),
+    ));
+
     let paginator = crate::db::file::Entity::find()
         .filter(conditions)
         .order_by_asc(Column::UploadTime)
@@ -147,7 +164,7 @@ pub async fn file_list(
     for m in lists {
         result.push(FileListResponse {
             name: m.name,
-            uploadTime: m.upload_time.to_string(),
+            upload_time: m.upload_time.to_string(),
             operator: m.operator,
             size: m.size,
         });
@@ -187,32 +204,28 @@ pub async fn upload(
         debug!(?field);
         debug!(?claims);
         let name = field.file_name().unwrap().to_string();
-        let size = field.bytes().await.unwrap().len() as u32;
+        // let size = field.bytes().await.unwrap().len() as u32;
         debug!(?name);
-        debug!(?size);
+        // debug!(?size);
 
         use crate::db::file::Column;
 
         let res = crate::db::file::Entity::find()
-            .filter(
-                Condition::all()
-                    .add(Column::Name.eq(name.clone()))
-                    .add(Column::Size.eq(size)),
-            )
+            .filter(Column::Name.eq(name.clone()))
             .one(conn)
             .await
             .unwrap();
 
-        use std::time::SystemTime;
-        let now = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as i64;
+        let location = env::var("HOME").unwrap();
+        let location = format!("{}/{}", location, name.clone());
+        let mut file = std::fs::File::create(location).unwrap();
+        let _result = file.write_all(&field.bytes().await.unwrap());
 
+        let now = get_epoch();
         if let None = res {
             let model = crate::db::file::ActiveModel {
                 name: Set(name),
-                size: Set(size),
+                size: Set(0),
                 is_delete: Set(false),
                 operator: Set(id.to_string()),
                 location: Set("where".to_string()),
