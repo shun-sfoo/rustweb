@@ -44,6 +44,7 @@ async fn main() {
         .route("/login", post(login))
         .route("/me", get(me))
         .route("/file_list", get(file_list))
+        .route("/files", get(file_list))
         .route("/upload", post(upload))
         .route("/users", get(users))
         .layer(Extension(conn))

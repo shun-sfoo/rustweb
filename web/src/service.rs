@@ -2,7 +2,9 @@ use std::{collections::HashMap, env, io::Write};
 
 use axum::{
     extract::{Multipart, Query},
-    response::IntoResponse,
+    headers::HeaderName,
+    http::{HeaderMap, HeaderValue, StatusCode},
+    response::{IntoResponse, IntoResponseParts, ResponseParts},
     Extension, Json,
 };
 use sea_orm::{
@@ -32,9 +34,31 @@ pub struct FileParams {
     posts_per_page: Option<usize>,
     name: Option<String>,
     #[serde(rename(deserialize = "uploadTimeBegin"))]
-    upload_time_begin: i64,
+    upload_time_begin: Option<i64>,
     #[serde(rename(deserialize = "uploadTimeEnd"))]
-    upload_time_end: i64,
+    upload_time_end: Option<i64>,
+}
+
+struct SetHeader<'a>(&'a str, &'a str);
+
+impl<'a> IntoResponseParts for SetHeader<'a> {
+    type Error = StatusCode;
+
+    fn into_response_parts(self, mut res: ResponseParts) -> Result<ResponseParts, Self::Error> {
+        let name = self
+            .0
+            .parse::<HeaderName>()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        let value = self
+            .1
+            .parse::<HeaderValue>()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        res.headers_mut().insert(name, value);
+
+        Ok(res)
+    }
 }
 
 fn get_epoch() -> i64 {
@@ -118,6 +142,7 @@ pub async fn users(Extension(ref conn): Extension<DbConn>) -> impl IntoResponse 
 
 #[derive(Serialize, Debug)]
 pub struct FileListResponse {
+    id: i32,
     name: String,
     #[serde(rename = "uploadTime")]
     upload_time: String,
@@ -143,12 +168,8 @@ pub async fn file_list(
     }
 
     conditions = conditions.add(Column::UploadTime.between(
-        params.upload_time_begin,
-        if params.upload_time_end == 0 {
-            get_epoch()
-        } else {
-            0
-        },
+        params.upload_time_begin.unwrap_or(0),
+        params.upload_time_end.unwrap_or(get_epoch()),
     ));
 
     let paginator = crate::db::file::Entity::find()
@@ -166,14 +187,18 @@ pub async fn file_list(
     let mut result = Vec::new();
     for m in lists {
         result.push(FileListResponse {
+            id: m.id,
             name: m.name,
             upload_time: m.upload_time.to_string(),
             operator: m.operator,
             size: m.size,
         });
     }
+    // Content-Range: posts 0-24/319
+    // let mut headers = HeaderMap::new();
+    // headers.insert("content-range", "files 0-24/319".parse().unwrap());
 
-    return Json(result);
+    return (SetHeader("content-range", "files 0-24/319"), Json(result));
 }
 
 pub async fn me(
