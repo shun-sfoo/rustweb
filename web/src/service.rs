@@ -10,7 +10,6 @@ use sea_orm::{
     QueryOrder, Set,
 };
 use serde::{Deserialize, Serialize};
-use tokio::task_local;
 use tracing::debug;
 
 use crate::model::claims::Claims;
@@ -33,9 +32,9 @@ pub struct FileParams {
     posts_per_page: Option<usize>,
     name: Option<String>,
     #[serde(rename(deserialize = "uploadTimeBegin"))]
-    upload_time_begin: Option<i64>,
+    upload_time_begin: i64,
     #[serde(rename(deserialize = "uploadTimeEnd"))]
-    upload_time_end: Option<i64>,
+    upload_time_end: i64,
 }
 
 fn get_epoch() -> i64 {
@@ -144,8 +143,12 @@ pub async fn file_list(
     }
 
     conditions = conditions.add(Column::UploadTime.between(
-        params.upload_time_begin.unwrap_or(0),
-        params.upload_time_end.unwrap_or(get_epoch()),
+        params.upload_time_begin,
+        if params.upload_time_end == 0 {
+            get_epoch()
+        } else {
+            0
+        },
     ));
 
     let paginator = crate::db::file::Entity::find()

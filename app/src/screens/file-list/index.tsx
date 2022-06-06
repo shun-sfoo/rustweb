@@ -1,5 +1,5 @@
-import styled from '@emotion/styled';
 import React from 'react';
+import styled from '@emotion/styled';
 import { useEffect, useState } from 'react';
 import { cleanObject, useDebounce, useMount } from 'utils';
 import { useHttp } from 'utils/http';
@@ -9,8 +9,8 @@ import { SearchPanel } from './search-panel';
 export const FileListScreen = () => {
   const [param, setParam] = useState({
     name: '',
-    uploadTimeBegin: '',
-    uploadTimeEnd: '',
+    uploadTimeBegin: 0,
+    uploadTimeEnd: 0,
   });
 
   const [list, setList] = useState([]);

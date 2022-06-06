@@ -43,7 +43,6 @@ const PageHeader = () => {
   const { logout, user } = useAuth();
   return (
     <Header between={true}>
-      <SoftwareLogo width={'18rem'} color={'rgb(38, 132, 255)'} />
       <HeaderLeft gap={true}>
         <Upload {...props}>
           <Button icon={<UploadOutlined />}>Click to Upload</Button>

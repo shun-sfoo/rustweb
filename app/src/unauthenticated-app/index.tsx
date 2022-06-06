@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { LoginScreen } from './login';
 import { RegisterScreen } from './register';
 import styled from '@emotion/styled';
-import logo from 'assets/logo.jpeg';
+// import logo from 'assets/logo.jpeg';
+import logo from '../logo.svg';
 import left from 'assets/left.svg';
 import right from 'assets/right.svg';
 

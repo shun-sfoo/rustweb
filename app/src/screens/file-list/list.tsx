@@ -20,9 +20,12 @@ interface ListProps {
 export const List = ({ users, list }: ListProps) => {
   return (
     <Table
-      pagination={false}
+      rowSelection={{
+        type: 'checkbox',
+      }}
+      bordered={true}
+      pagination={{ position: ['bottomRight'] }}
       columns={[
-        { title: 'id', dataIndex: 'id' },
         {
           title: '名称',
           dataIndex: 'name',
@@ -37,10 +40,6 @@ export const List = ({ users, list }: ListProps) => {
               </span>
             );
           },
-        },
-        {
-          title: '文件大小',
-          dataIndex: 'size',
         },
         {
           title: '上传时间',
