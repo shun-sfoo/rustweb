@@ -13,7 +13,12 @@ const i18nProvider = polyglotI18nProvider(() => chineseMessages, 'ch');
 
 const App = () => (
   <Admin i18nProvider={i18nProvider} dataProvider={dataProvider}>
-    <Resource name="files" list={FileList} create={FileUpload} />
+    <Resource
+      name="files"
+      options={{ label: '流向记录' }}
+      list={FileList}
+      create={FileUpload}
+    />
   </Admin>
 );
 export default App;

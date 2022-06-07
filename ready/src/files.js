@@ -37,7 +37,6 @@ const postFilters = [
 
 const FileBulkActionButtons = () => (
   <Fragment>
-    <BulkExportButton label="下载" exporter={downloadFile} />
     <BulkDeleteButton />
   </Fragment>
 );
@@ -49,7 +48,6 @@ const downloadFile = (record) => {
 export const FileList = () => (
   <List filters={postFilters} actions={<ListActions />}>
     <Datagrid bulkActionButtons={<FileBulkActionButtons />}>
-      <TextField source="id" />
       <FileField source="location" title="name" label="文件名称" />
       <MyDateField source="uploadTime" label="上传时间" />
       <TextField source="operator" label="操作者" />

@@ -9,8 +9,8 @@ use axum::{
     Extension, Json,
 };
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, DbConn, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, Set,
+    sea_query::Expr, ActiveModelTrait, ColumnTrait, Condition, DbConn, EntityTrait, PaginatorTrait,
+    QueryFilter, QueryOrder, Set, UpdateResult,
 };
 use serde::{Deserialize, Serialize};
 use tokio_util::io::ReaderStream;
@@ -183,6 +183,101 @@ pub struct FileListResponse {
     size: u32,
 }
 
+pub async fn list(
+    Query(params): Query<HashMap<String, String>>,
+    Extension(ref conn): Extension<DbConn>,
+) -> impl IntoResponse {
+    debug!(?params);
+    use crate::db::file::Column;
+    let mut conditions = Condition::all();
+    conditions = conditions.add(Column::IsDelete.eq(0));
+
+    if params.contains_key("filter") {
+        let filter = serde_json::from_str::<Filter>(&params["filter"]).unwrap();
+
+        if let Some(name) = filter.name {
+            conditions = conditions.add(Column::Name.like(&format!("%{}%", name)));
+        }
+
+        match (filter.upload_begin, filter.upload_end) {
+            (Some(begin), Some(end)) => {
+                let b = format!("{} 00:00:00", begin);
+                let e = format!("{} 23:59:59", end);
+                let b = chrono::NaiveDateTime::parse_from_str(&b, "%Y-%m-%d %H:%M:%S").unwrap();
+                let e = chrono::NaiveDateTime::parse_from_str(&e, "%Y-%m-%d %H:%M:%S").unwrap();
+
+                conditions =
+                    conditions.add(Column::UploadTime.between(b.timestamp(), e.timestamp()));
+            }
+            (Some(begin), None) => {
+                let b = format!("{} 00:00:00", begin);
+                let b = chrono::NaiveDateTime::parse_from_str(&b, "%Y-%m-%d %H:%M:%S").unwrap();
+                conditions = conditions.add(Column::UploadTime.gt(b.timestamp()));
+            }
+            (None, Some(end)) => {
+                let e = format!("{} 23:59:59", end);
+                let e = chrono::NaiveDateTime::parse_from_str(&e, "%Y-%m-%d %H:%M:%S").unwrap();
+                conditions = conditions.add(Column::UploadTime.lt(e.timestamp()));
+            }
+            (None, None) => {}
+        };
+    }
+
+    let list = crate::db::file::Entity::find()
+        .filter(conditions)
+        .all(conn)
+        .await
+        .unwrap();
+
+    let total = list.len();
+
+    let mut data = Vec::new();
+
+    let mut headers = HeaderMap::new();
+    headers.insert("content-range", format!("/{}", total).parse().unwrap());
+
+    for m in list {
+        data.push(FileListResponse {
+            id: m.id,
+            name: m.name,
+            upload_time: m.upload_time.to_string(),
+            operator: "admin".to_string(),
+            location: m.location,
+            size: m.size,
+        });
+    }
+
+    (headers, Json(data))
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Id {
+    id: Vec<i32>,
+}
+
+pub async fn delete_file(
+    Query(ids): Query<HashMap<String, String>>,
+
+    Extension(ref conn): Extension<DbConn>,
+) -> impl IntoResponse {
+    debug!(?ids);
+
+    let id_str = ids.get("filter").unwrap();
+
+    debug!(?id_str);
+    let ids: Id = serde_json::from_str(id_str).unwrap();
+    debug!(?ids);
+
+    let d = crate::db::file::Entity::update_many()
+        .col_expr(crate::db::file::Column::IsDelete, Expr::value(true))
+        .filter(crate::db::file::Column::Id.is_in(ids.id))
+        .exec(conn)
+        .await
+        .unwrap();
+
+    Json(vec![d.rows_affected])
+}
+
 pub async fn file_list(
     // _claims: Claims,
     Query(params): Query<HashMap<String, String>>,
@@ -327,7 +422,7 @@ pub async fn upload(
                 size: Set(0),
                 is_delete: Set(false),
                 operator: Set("1".to_string()),
-                location: Set(format!("http://localhost:8080/{}", name)),
+                location: Set(format!("http://192.168.1.23:8080/{}", name)),
                 upload_time: Set(now),
                 ..Default::default()
             };

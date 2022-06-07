@@ -1,11 +1,14 @@
 use std::{env, net::SocketAddr};
 
 use axum::{
-    routing::{get, post},
+    routing::{delete, get, post},
     Extension, Router,
 };
 use sea_orm::Database;
-use service::{download, download_file, file_list, handler, login, me, register, upload, users};
+use service::{
+    delete_file, download, download_file, file_list, handler, list, login, me, register, upload,
+    users,
+};
 use tower_http::cors::CorsLayer;
 
 mod db;
@@ -43,7 +46,7 @@ async fn main() {
         .route("/login", post(login))
         .route("/me", get(me))
         .route("/file_list", get(file_list))
-        .route("/files", get(file_list))
+        .route("/files", get(list).delete(delete_file))
         .route("/upload", post(upload))
         .route("/users", get(users))
         .route("/fake", get(handler))
