@@ -34,4 +34,24 @@ export default {
       method: 'DELETE',
     }).then(({ json }) => ({ data: json }));
   },
+
+  getMany: (resource, params) => {
+    const query = {
+      filter: JSON.stringify({ id: params.ids }),
+    };
+    const url = `${apiUrl}/${resource}?${stringify(query)}`;
+    return httpClient(url).then(({ json }) => ({ data: json }));
+  },
+
+  create: (_, params) => {
+    let formData = new FormData();
+    formData.append('file', params.data.files.rawFile);
+
+    return httpClient(`${apiUrl}/upload`, {
+      method: 'POST',
+      body: formData,
+    }).then(({ json }) => ({
+      data: { ...params.data, id: json.id },
+    }));
+  },
 };

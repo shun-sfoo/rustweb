@@ -7,21 +7,25 @@ import {
   TextField,
   TextInput,
   TopToolbar,
+  FileInput,
+  FileField,
+  ImageField,
+  Create,
+  SimpleForm,
   useRecordContext,
+  CreateButton,
+  BulkExportButton,
+  BulkDeleteButton,
 } from 'react-admin';
 
 import IconFileUpload from '@mui/icons-material/UploadFile';
+import LaunchIcon from '@mui/icons-material/Launch';
+import { Link } from '@mui/material';
+import { Fragment } from 'react';
 
 const ListActions = () => (
   <TopToolbar>
-    <Button
-      onClick={() => {
-        alert('Your custom action');
-      }}
-      label="文件上传"
-    >
-      <IconFileUpload />
-    </Button>
+    <CreateButton label="上传" icon={<IconFileUpload />} />
   </TopToolbar>
 );
 
@@ -31,11 +35,22 @@ const postFilters = [
   <DateInput source="upload_end" label="上传结束" alwaysOn />,
 ];
 
+const FileBulkActionButtons = () => (
+  <Fragment>
+    <BulkExportButton label="下载" exporter={downloadFile} />
+    <BulkDeleteButton />
+  </Fragment>
+);
+
+const downloadFile = (record) => {
+  console.log(record);
+};
+
 export const FileList = () => (
   <List filters={postFilters} actions={<ListActions />}>
-    <Datagrid rowClick="edit">
+    <Datagrid bulkActionButtons={<FileBulkActionButtons />}>
       <TextField source="id" />
-      <TextField source="name" label="文件名称" />
+      <FileField source="location" title="name" label="文件名称" />
       <MyDateField source="uploadTime" label="上传时间" />
       <TextField source="operator" label="操作者" />
     </Datagrid>
@@ -48,3 +63,30 @@ const MyDateField = ({ source }) => {
     ? dayjs(record[source] * 1000).format('YYYY-MM-DD HH:mm:ss')
     : null;
 };
+
+const MyUrlField = ({ source }) => {
+  const record = useRecordContext();
+  return record ? (
+    <Link
+      href={'http://localhost:8080/' + record[source]}
+      sx={{ textDecoration: 'none' }}
+    >
+      {record[source]}
+      <LaunchIcon sx={{ width: '0.5em', height: '0.5em', paddingLeft: 2 }} />
+    </Link>
+  ) : null;
+};
+
+export const FileUpload = () => (
+  <Create>
+    <SimpleForm>
+      <FileInput
+        source="files"
+        label="选择文件"
+        placeholder={<p>点击或者拖拽上传</p>}
+      >
+        <ImageField source="src" title="title" />
+      </FileInput>
+    </SimpleForm>
+  </Create>
+);

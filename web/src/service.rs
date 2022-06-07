@@ -1,9 +1,10 @@
 use std::{collections::HashMap, env, io::Write};
 
 use axum::{
-    extract::{Multipart, Query},
+    body::{Body, StreamBody},
+    extract::{Multipart, Path, Query},
     headers::HeaderName,
-    http::{HeaderMap, HeaderValue, StatusCode},
+    http::{HeaderMap, HeaderValue, Request, StatusCode},
     response::{IntoResponse, IntoResponseParts, ResponseParts},
     Extension, Json,
 };
@@ -12,7 +13,10 @@ use sea_orm::{
     QueryOrder, Set,
 };
 use serde::{Deserialize, Serialize};
-use tracing::debug;
+use tokio_util::io::ReaderStream;
+use tower::ServiceExt;
+use tower_http::services::ServeDir;
+use tracing::{debug, info};
 
 use crate::model::claims::Claims;
 
@@ -37,6 +41,34 @@ pub struct FileParams {
     upload_time_begin: Option<i64>,
     #[serde(rename(deserialize = "uploadTimeEnd"))]
     upload_time_end: Option<i64>,
+}
+
+// This will parse query strings like `?page=2&per_page=30` into `Pagination`
+#[derive(Deserialize, Debug)]
+pub struct Pagination {
+    page: usize,
+    per_page: usize,
+}
+
+#[derive(Serialize, Debug)]
+pub struct FileUploadResponse {
+    id: Option<i32>,
+}
+
+// http://localhost:8080/files?filter={"name":"1","upload_begin":"2022-06-16"}&range=[0,9]&sort=["id","ASC"]
+
+#[derive(Deserialize, Debug)]
+pub struct FileQuery {
+    filter: Option<String>,
+    range: Option<String>,
+    sort: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Filter {
+    name: Option<String>,
+    upload_begin: Option<String>,
+    upload_end: Option<String>,
 }
 
 struct SetHeader<'a>(&'a str, &'a str);
@@ -147,30 +179,68 @@ pub struct FileListResponse {
     #[serde(rename = "uploadTime")]
     upload_time: String,
     operator: String,
+    location: String,
     size: u32,
 }
 
 pub async fn file_list(
     // _claims: Claims,
-    Query(params): Query<FileParams>,
+    Query(params): Query<HashMap<String, String>>,
     Extension(ref conn): Extension<DbConn>,
 ) -> impl IntoResponse {
     debug!(?params);
+    // debug!(?pagination);
     use crate::db::file::Column;
 
-    let page = params.page.unwrap_or(1);
-    let posts_per_page = params.posts_per_page.unwrap_or(20);
     let mut conditions = Condition::all();
-    // TODO find a way to search update time start and end
-    conditions = conditions.add(Column::IsDelete.eq(0));
-    if let Some(name) = params.name {
-        conditions = conditions.add(Column::Name.like(&format!("%{}%", &name)));
+
+    if params.contains_key("filter") {
+        let filter = serde_json::from_str::<Filter>(params.get("filter").unwrap()).unwrap();
+        if let Some(name) = filter.name {
+            conditions = conditions.add(Column::Name.eq(name));
+        }
+        // todo update time
     }
 
-    conditions = conditions.add(Column::UploadTime.between(
-        params.upload_time_begin.unwrap_or(0),
-        params.upload_time_end.unwrap_or(get_epoch()),
-    ));
+    let mut start_index = 0;
+    let mut end_index = 0;
+
+    if params.contains_key("range") {
+        let (start, end) =
+            serde_json::from_str::<(i32, i32)>(params.get("range").unwrap()).unwrap();
+
+        start_index = start;
+        end_index = end;
+    }
+
+    params.get("filter").map(|filter| {
+        serde_json::from_str::<Filter>(filter).unwrap();
+    });
+
+    params.get("range").map(|range| {
+        let range = serde_json::from_str::<(u32, u32)>(range).unwrap();
+        info!(?range);
+    });
+
+    params.get("sort").map(|sort| {
+        let sort = serde_json::from_str::<(String, String)>(sort).unwrap();
+        info!(?sort);
+    });
+
+    // let page = params.page.unwrap_or(1);
+    let page = 1;
+    // let posts_per_page = params.posts_per_page.unwrap_or(20);
+    let posts_per_page = 20;
+    // TODO find a way to search update time start and end
+    conditions = conditions.add(Column::IsDelete.eq(0));
+    // if let Some(name) = params.name {
+    //     conditions = conditions.add(Column::Name.like(&format!("%{}%", &name)));
+    // }
+
+    // conditions = conditions.add(Column::UploadTime.between(
+    //     params.upload_time_begin.unwrap_or(0),
+    //     params.upload_time_end.unwrap_or(get_epoch()),
+    // ));
 
     let paginator = crate::db::file::Entity::find()
         .filter(conditions)
@@ -191,6 +261,7 @@ pub async fn file_list(
             name: m.name,
             upload_time: m.upload_time.to_string(),
             operator: m.operator,
+            location: m.location,
             size: m.size,
         });
     }
@@ -223,14 +294,14 @@ pub async fn me(
 }
 
 pub async fn upload(
-    claims: Claims,
+    // claims: Claims,
     mut multipart: Multipart,
     Extension(ref conn): Extension<DbConn>,
-) {
-    let id = claims.id;
+) -> Json<FileUploadResponse> {
+    // let id = claims.id;
     if let Some(field) = multipart.next_field().await.unwrap() {
         debug!(?field);
-        debug!(?claims);
+        // debug!(?claims);
         let name = field.file_name().unwrap().to_string();
         // let size = field.bytes().await.unwrap().len() as u32;
         debug!(?name);
@@ -252,19 +323,86 @@ pub async fn upload(
         let now = get_epoch();
         if let None = res {
             let model = crate::db::file::ActiveModel {
-                name: Set(name),
+                name: Set(name.clone()),
                 size: Set(0),
                 is_delete: Set(false),
-                operator: Set(id.to_string()),
-                location: Set("where".to_string()),
+                operator: Set("1".to_string()),
+                location: Set(format!("http://localhost:8080/{}", name)),
                 upload_time: Set(now),
                 ..Default::default()
             };
 
-            crate::db::file::Entity::insert(model)
+            let result = crate::db::file::Entity::insert(model)
                 .exec(conn)
                 .await
                 .unwrap();
+
+            return Json(FileUploadResponse {
+                id: Some(result.last_insert_id),
+            });
         }
     }
+
+    return Json(FileUploadResponse { id: None });
+}
+
+pub async fn download(req: Request<Body>) -> impl IntoResponse {
+    debug!(?req);
+    // image_dir 地址为 /home/user/images/
+    // path 为 images/name
+    // 根据fallback的原理 找不到的路由会调用到这里
+    // 如果文件的路径示 /name
+    // 会调用 / 路由，从而产生错误
+    // 确保 ServeDir::new(image_path).oneshot(req) 能找到正确的地址
+    let image_dir = env::var("HOME").expect("NO IMAGE_PATH");
+    info!(?image_dir);
+    let path = req.uri().path().to_string();
+    info!(?path);
+
+    return match ServeDir::new(image_dir).oneshot(req).await {
+        Ok(res) => Ok(res.map(axum::body::boxed)),
+        Err(e) => Err(format!("{}", e)),
+    };
+}
+
+pub async fn download_file(Path(filename): Path<String>) -> impl IntoResponse {
+    debug!(?filename);
+
+    let path = env::var("HOME").expect("No home");
+
+    let file_path = format!("{}/{}", path, filename);
+
+    let file = match tokio::fs::File::open(file_path.clone()).await {
+        Ok(file) => file,
+        Err(err) => return Err((StatusCode::NOT_FOUND, format!("File not found: {}", err))),
+    };
+
+    // convert the `AsyncRead` into a `Stream`
+    let stream = ReaderStream::new(file);
+    // convert the `Stream` into an `axum::body::HttpBody`
+    let body = StreamBody::new(stream);
+
+    let mut headers = HeaderMap::new();
+
+    let attachment = format!("attachment; filename={}", filename);
+
+    headers.insert("content-disposition", attachment.parse().unwrap());
+
+    Ok((headers, body))
+}
+
+pub async fn handler() -> impl IntoResponse {
+    // `File` implements `AsyncRead`
+    let file = match tokio::fs::File::open("Cargo.toml").await {
+        Ok(file) => file,
+        Err(err) => return Err((StatusCode::NOT_FOUND, format!("File not found: {}", err))),
+    };
+    // convert the `AsyncRead` into a `Stream`
+    let stream = ReaderStream::new(file);
+    // convert the `Stream` into an `axum::body::HttpBody`
+    let body = StreamBody::new(stream);
+
+    let headers = SetHeader("content-disposition", "attachment; filename=\"Cargo.toml\"");
+
+    Ok((headers, body))
 }
