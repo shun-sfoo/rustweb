@@ -14,8 +14,8 @@ import {
   SimpleForm,
   useRecordContext,
   CreateButton,
-  BulkExportButton,
   BulkDeleteButton,
+  BulkDeleteWithConfirmButton,
 } from 'react-admin';
 
 import IconFileUpload from '@mui/icons-material/UploadFile';
@@ -26,6 +26,7 @@ import { Fragment } from 'react';
 const ListActions = () => (
   <TopToolbar>
     <CreateButton label="上传" icon={<IconFileUpload />} />
+    <BulkDeleteWithConfirmButton confirmContent="是否确认删除？" />
   </TopToolbar>
 );
 

@@ -17,6 +17,7 @@ services:
     privileged: true
     volumes:
       - ${DATA_PATH_HOST}/mysql:/var/lib/mysql        # 引用 .env 配置中 DATA_PATH_HOST 变量，将宿主机上存放 Mysql 数据的目录挂载到容器中 /var/lib/mysql 目录
+      - ./mycustom.cnf:/etc/mysql/conf.d/custom.cnf
     ports:
       - "${MYSQL_PORT}:3306"                          # 设置容器3306端口映射指定宿主机端口
     networks:
