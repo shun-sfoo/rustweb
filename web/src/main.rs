@@ -5,10 +5,7 @@ use axum::{
     Extension, Router,
 };
 use sea_orm::Database;
-use service::{
-    delete_file, download, download_file, file_list, handler, list, login, me, register, upload,
-    users,
-};
+use service::{delete_file, download_file, list, login, me, register, upload, users};
 use tower_http::cors::CorsLayer;
 
 mod db;
@@ -45,17 +42,15 @@ async fn main() {
         .route("/register", post(register))
         .route("/login", post(login))
         .route("/me", get(me))
-        .route("/file_list", get(file_list))
         .route("/files", get(list).delete(delete_file))
+        .route("/clones", get(list).delete(delete_file))
         .route("/upload", post(upload))
         .route("/users", get(users))
-        .route("/fake", get(handler))
         .route("/:name", get(download_file))
-        .fallback(get(download))
         .layer(Extension(conn))
         .layer(cors);
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8081));
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await

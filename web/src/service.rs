@@ -1,22 +1,20 @@
 use std::{collections::HashMap, env, io::Write};
 
 use axum::{
-    body::{Body, StreamBody},
+    body::StreamBody,
     extract::{Multipart, Path, Query},
     headers::HeaderName,
-    http::{HeaderMap, HeaderValue, Request, StatusCode},
+    http::{HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, IntoResponseParts, ResponseParts},
     Extension, Json,
 };
 use sea_orm::{
-    sea_query::Expr, ActiveModelTrait, ColumnTrait, Condition, DbConn, EntityTrait, PaginatorTrait,
-    QueryFilter, QueryOrder, Set, UpdateResult,
+    sea_query::Expr, ActiveModelTrait, ColumnTrait, Condition, DbConn, EntityTrait, QueryFilter,
+    QuerySelect, Set,
 };
 use serde::{Deserialize, Serialize};
 use tokio_util::io::ReaderStream;
-use tower::ServiceExt;
-use tower_http::services::ServeDir;
-use tracing::{debug, info};
+use tracing::debug;
 
 use crate::model::claims::Claims;
 
@@ -32,37 +30,12 @@ pub struct UserResponse {
     pub user: User,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct FileParams {
-    page: Option<usize>,
-    posts_per_page: Option<usize>,
-    name: Option<String>,
-    #[serde(rename(deserialize = "uploadTimeBegin"))]
-    upload_time_begin: Option<i64>,
-    #[serde(rename(deserialize = "uploadTimeEnd"))]
-    upload_time_end: Option<i64>,
-}
-
-// This will parse query strings like `?page=2&per_page=30` into `Pagination`
-#[derive(Deserialize, Debug)]
-pub struct Pagination {
-    page: usize,
-    per_page: usize,
-}
-
 #[derive(Serialize, Debug)]
 pub struct FileUploadResponse {
     id: Option<i32>,
 }
 
 // http://localhost:8080/files?filter={"name":"1","upload_begin":"2022-06-16"}&range=[0,9]&sort=["id","ASC"]
-
-#[derive(Deserialize, Debug)]
-pub struct FileQuery {
-    filter: Option<String>,
-    range: Option<String>,
-    sort: Option<String>,
-}
 
 #[derive(Deserialize, Debug)]
 pub struct Filter {
@@ -189,8 +162,15 @@ pub async fn list(
 ) -> impl IntoResponse {
     debug!(?params);
     use crate::db::file::Column;
+    use crate::db::file::Entity;
+    use chrono::NaiveDateTime;
+
     let mut conditions = Condition::all();
-    conditions = conditions.add(Column::IsDelete.eq(0));
+    conditions = conditions.add(Column::IsDelete.eq(false));
+
+    let mut offset = 0;
+    let mut limit = 10;
+    let mut end_index = limit;
 
     if params.contains_key("filter") {
         let filter = serde_json::from_str::<Filter>(&params["filter"]).unwrap();
@@ -203,38 +183,59 @@ pub async fn list(
             (Some(begin), Some(end)) => {
                 let b = format!("{} 00:00:00", begin);
                 let e = format!("{} 23:59:59", end);
-                let b = chrono::NaiveDateTime::parse_from_str(&b, "%Y-%m-%d %H:%M:%S").unwrap();
-                let e = chrono::NaiveDateTime::parse_from_str(&e, "%Y-%m-%d %H:%M:%S").unwrap();
+                let b = NaiveDateTime::parse_from_str(&b, "%Y-%m-%d %H:%M:%S").unwrap();
+                let e = NaiveDateTime::parse_from_str(&e, "%Y-%m-%d %H:%M:%S").unwrap();
 
                 conditions =
                     conditions.add(Column::UploadTime.between(b.timestamp(), e.timestamp()));
             }
+
             (Some(begin), None) => {
                 let b = format!("{} 00:00:00", begin);
-                let b = chrono::NaiveDateTime::parse_from_str(&b, "%Y-%m-%d %H:%M:%S").unwrap();
-                conditions = conditions.add(Column::UploadTime.gt(b.timestamp()));
+                let b = NaiveDateTime::parse_from_str(&b, "%Y-%m-%d %H:%M:%S").unwrap();
+                conditions = conditions.add(Column::UploadTime.gte(b.timestamp()));
             }
+
             (None, Some(end)) => {
                 let e = format!("{} 23:59:59", end);
-                let e = chrono::NaiveDateTime::parse_from_str(&e, "%Y-%m-%d %H:%M:%S").unwrap();
-                conditions = conditions.add(Column::UploadTime.lt(e.timestamp()));
+                let e = NaiveDateTime::parse_from_str(&e, "%Y-%m-%d %H:%M:%S").unwrap();
+                conditions = conditions.add(Column::UploadTime.lte(e.timestamp()));
             }
+
             (None, None) => {}
         };
     }
 
-    let list = crate::db::file::Entity::find()
-        .filter(conditions)
+    if params.contains_key("range") {
+        let (start, end) = serde_json::from_str::<(u64, u64)>(&params["range"]).unwrap();
+        offset = start;
+        limit = end - start + 1;
+        end_index = end;
+    }
+
+    let total = Entity::find()
+        .filter(Column::IsDelete.eq(false))
         .all(conn)
         .await
         .unwrap();
 
-    let total = list.len();
+    let list = Entity::find()
+        .filter(conditions)
+        .offset(offset)
+        .limit(limit)
+        .all(conn)
+        .await
+        .unwrap();
 
     let mut data = Vec::new();
 
     let mut headers = HeaderMap::new();
-    headers.insert("content-range", format!("/{}", total).parse().unwrap());
+    headers.insert(
+        "content-range",
+        format!("files {}-{}/{}", offset, end_index, total.len())
+            .parse()
+            .unwrap(),
+    );
 
     for m in list {
         data.push(FileListResponse {
@@ -257,7 +258,6 @@ pub struct Id {
 
 pub async fn delete_file(
     Query(ids): Query<HashMap<String, String>>,
-
     Extension(ref conn): Extension<DbConn>,
 ) -> impl IntoResponse {
     debug!(?ids);
@@ -276,95 +276,6 @@ pub async fn delete_file(
         .unwrap();
 
     Json(vec![d.rows_affected])
-}
-
-pub async fn file_list(
-    // _claims: Claims,
-    Query(params): Query<HashMap<String, String>>,
-    Extension(ref conn): Extension<DbConn>,
-) -> impl IntoResponse {
-    debug!(?params);
-    // debug!(?pagination);
-    use crate::db::file::Column;
-
-    let mut conditions = Condition::all();
-
-    if params.contains_key("filter") {
-        let filter = serde_json::from_str::<Filter>(params.get("filter").unwrap()).unwrap();
-        if let Some(name) = filter.name {
-            conditions = conditions.add(Column::Name.eq(name));
-        }
-        // todo update time
-    }
-
-    let mut start_index = 0;
-    let mut end_index = 0;
-
-    if params.contains_key("range") {
-        let (start, end) =
-            serde_json::from_str::<(i32, i32)>(params.get("range").unwrap()).unwrap();
-
-        start_index = start;
-        end_index = end;
-    }
-
-    params.get("filter").map(|filter| {
-        serde_json::from_str::<Filter>(filter).unwrap();
-    });
-
-    params.get("range").map(|range| {
-        let range = serde_json::from_str::<(u32, u32)>(range).unwrap();
-        info!(?range);
-    });
-
-    params.get("sort").map(|sort| {
-        let sort = serde_json::from_str::<(String, String)>(sort).unwrap();
-        info!(?sort);
-    });
-
-    // let page = params.page.unwrap_or(1);
-    let page = 1;
-    // let posts_per_page = params.posts_per_page.unwrap_or(20);
-    let posts_per_page = 20;
-    // TODO find a way to search update time start and end
-    conditions = conditions.add(Column::IsDelete.eq(0));
-    // if let Some(name) = params.name {
-    //     conditions = conditions.add(Column::Name.like(&format!("%{}%", &name)));
-    // }
-
-    // conditions = conditions.add(Column::UploadTime.between(
-    //     params.upload_time_begin.unwrap_or(0),
-    //     params.upload_time_end.unwrap_or(get_epoch()),
-    // ));
-
-    let paginator = crate::db::file::Entity::find()
-        .filter(conditions)
-        .order_by_asc(Column::UploadTime)
-        .paginate(conn, posts_per_page);
-
-    let _num_pages = paginator.num_pages().await.ok().unwrap();
-
-    let lists = paginator
-        .fetch_page(page - 1)
-        .await
-        .expect("could not retrieve posts");
-
-    let mut result = Vec::new();
-    for m in lists {
-        result.push(FileListResponse {
-            id: m.id,
-            name: m.name,
-            upload_time: m.upload_time.to_string(),
-            operator: m.operator,
-            location: m.location,
-            size: m.size,
-        });
-    }
-    // Content-Range: posts 0-24/319
-    // let mut headers = HeaderMap::new();
-    // headers.insert("content-range", "files 0-24/319".parse().unwrap());
-
-    return (SetHeader("content-range", "files 0-24/319"), Json(result));
 }
 
 pub async fn me(
@@ -422,7 +333,7 @@ pub async fn upload(
                 size: Set(0),
                 is_delete: Set(false),
                 operator: Set("1".to_string()),
-                location: Set(format!("http://192.168.1.23:8080/{}", name)),
+                location: Set(format!("http://39.107.88.89:8081/{}", name)),
                 upload_time: Set(now),
                 ..Default::default()
             };
@@ -439,25 +350,6 @@ pub async fn upload(
     }
 
     return Json(FileUploadResponse { id: None });
-}
-
-pub async fn download(req: Request<Body>) -> impl IntoResponse {
-    debug!(?req);
-    // image_dir 地址为 /home/user/images/
-    // path 为 images/name
-    // 根据fallback的原理 找不到的路由会调用到这里
-    // 如果文件的路径示 /name
-    // 会调用 / 路由，从而产生错误
-    // 确保 ServeDir::new(image_path).oneshot(req) 能找到正确的地址
-    let image_dir = env::var("HOME").expect("NO IMAGE_PATH");
-    info!(?image_dir);
-    let path = req.uri().path().to_string();
-    info!(?path);
-
-    return match ServeDir::new(image_dir).oneshot(req).await {
-        Ok(res) => Ok(res.map(axum::body::boxed)),
-        Err(e) => Err(format!("{}", e)),
-    };
 }
 
 pub async fn download_file(Path(filename): Path<String>) -> impl IntoResponse {
@@ -482,22 +374,6 @@ pub async fn download_file(Path(filename): Path<String>) -> impl IntoResponse {
     let attachment = format!("attachment; filename={}", filename);
 
     headers.insert("content-disposition", attachment.parse().unwrap());
-
-    Ok((headers, body))
-}
-
-pub async fn handler() -> impl IntoResponse {
-    // `File` implements `AsyncRead`
-    let file = match tokio::fs::File::open("Cargo.toml").await {
-        Ok(file) => file,
-        Err(err) => return Err((StatusCode::NOT_FOUND, format!("File not found: {}", err))),
-    };
-    // convert the `AsyncRead` into a `Stream`
-    let stream = ReaderStream::new(file);
-    // convert the `Stream` into an `axum::body::HttpBody`
-    let body = StreamBody::new(stream);
-
-    let headers = SetHeader("content-disposition", "attachment; filename=\"Cargo.toml\"");
 
     Ok((headers, body))
 }
