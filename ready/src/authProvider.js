@@ -41,5 +41,21 @@ export default {
     return localStorage.getItem('name') ? Promise.resolve() : Promise.reject();
   },
   // called when the user navigates to a new location, to check for permissions / roles
-  getPermissions: () => Promise.resolve(),
+  getPermissions: () => {
+    const url = `${apiUrl}/permissions`;
+
+    let options = {};
+
+    options.user = {
+      authenticated: true,
+      // use the token from local storage
+      token: localStorage.getItem('token'),
+    };
+
+    return httpClient(url, options).then(({ json }) => {
+      return {
+        data: json,
+      };
+    });
+  },
 };

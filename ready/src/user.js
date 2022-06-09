@@ -5,21 +5,31 @@ import {
   SimpleForm,
   TextInput,
   Edit,
+  Toolbar,
+  SaveButton,
+  PasswordInput,
 } from 'react-admin';
 
 export const UserList = () => (
-  <List>
-    <Datagrid rowClick="edit">
-      <TextField source="name" />
+  <List actions={false}>
+    <Datagrid bulkActionButtons={false} rowClick="edit">
+      <TextField source="name" label="用户名" />
     </Datagrid>
   </List>
 );
-
-export const UserEdit = () => (
-  <Edit>
-    <SimpleForm>
-      <TextInput source="old_password" label="输入原密码" />
-      <TextInput source="new_password" label="输入新密码" />
-    </SimpleForm>
-  </Edit>
+const MyToolbar = (props) => (
+  <Toolbar {...props}>
+    <SaveButton type="submit" />
+  </Toolbar>
 );
+
+export const UserEdit = () => {
+  return (
+    <Edit mutationMode="pessimistic">
+      <SimpleForm toolbar={<MyToolbar />}>
+        <PasswordInput source="old_password" label="输入原密码" />
+        <PasswordInput source="new_password" label="输入新密码" />
+      </SimpleForm>
+    </Edit>
+  );
+};

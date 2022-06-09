@@ -16,12 +16,15 @@ import {
   useRecordContext,
   CreateButton,
   BulkDeleteWithConfirmButton,
+  usePermissions,
 } from 'react-admin';
 
 import IconFileUpload from '@mui/icons-material/UploadFile';
 import LaunchIcon from '@mui/icons-material/Launch';
 import { Link } from '@mui/material';
 import { Fragment } from 'react';
+
+import { Box, Typography } from '@mui/material';
 
 const ListActions = () => (
   <TopToolbar>
@@ -52,30 +55,30 @@ const downloadFile = (record) => {
   console.log(record);
 };
 
+const Empty = () => (
+  <Box textAlign="center" m={1}>
+    <Typography variant="h4" paragraph>
+      No products available
+    </Typography>
+  </Box>
+);
+
 export const FileList = () => {
-  const id = localStorage.getItem('id');
-  console.log(id === '1');
-  if (id === '1') {
-    return (
-      <List filters={postFilters} actions={<ListActions />}>
-        <Datagrid bulkActionButtons={<FileBulkActionButtons />}>
-          <FileField source="location" title="name" label="文件名称" />
-          <MyDateField source="uploadTime" label="上传时间" />
-          <TextField source="operator" label="操作者" />
-        </Datagrid>
-      </List>
-    );
-  } else {
-    return (
-      <List filters={postFilters} action={<DisableToolBar />}>
-        <Datagrid>
-          <FileField source="location" title="name" label="文件名称" />
-          <MyDateField source="uploadTime" label="上传时间" />
-          <TextField source="operator" label="操作者" />
-        </Datagrid>
-      </List>
-    );
-  }
+  let id = localStorage.getItem('id');
+
+  return (
+    <List
+      filters={postFilters}
+      empty={false}
+      actions={id === '1' && <ListActions />}
+    >
+      <Datagrid bulkActionButtons={id === '1' && <FileBulkActionButtons />}>
+        <FileField source="location" title="name" label="文件名称" />
+        <MyDateField source="uploadTime" label="上传时间" />
+        <TextField source="operator" label="操作者" />
+      </Datagrid>
+    </List>
+  );
 };
 
 const MyDateField = ({ source }) => {

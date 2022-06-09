@@ -49,8 +49,8 @@ async fn main() {
         .route("/files", get(list).delete(delete_file).post(upload))
         .route("/clones", get(list).delete(delete_file))
         .route("/upload", post(upload))
-        .route("/users", get(users).put(edit))
-        .route("/users/:id", get(get_one))
+        .route("/users", get(users))
+        .route("/users/:id", get(get_one).put(edit))
         .route("/permissions", get(get_permission))
         .route(
             "/stores",

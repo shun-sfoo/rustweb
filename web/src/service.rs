@@ -14,7 +14,7 @@ use axum::{
 use jwt::Validation;
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, Condition, DbConn, EntityTrait, QueryFilter,
-    QuerySelect, Set, Update,
+    QuerySelect, Set,
 };
 use serde::{Deserialize, Serialize};
 use tokio_util::io::ReaderStream;
@@ -676,8 +676,21 @@ pub async fn store_download_file(Path(filename): Path<String>) -> impl IntoRespo
     Ok((headers, body))
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Password {
+    old_password: String,
+    new_password: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PasswordResponse {
+    id: Option<i32>,
+    msg: String,
+}
+
 pub async fn edit(
-    Query(data): Query<HashMap<String, String>>,
+    Path(id): Path<String>,
+    Json(data): Json<Password>,
     Extension(ref conn): Extension<DbConn>,
 ) -> impl IntoResponse {
     use crate::db::user::Column;
@@ -685,14 +698,15 @@ pub async fn edit(
 
     debug!(?data);
 
-    let old_password = data.get("old_password").unwrap().to_string();
-    let new_password = data.get("new_password").unwrap().to_string();
-    let id = data.get("id").unwrap().to_string();
+    // let old_password = data.get("old_password").unwrap().to_string();
+    // let new_password = data.get("new_password").unwrap().to_string();
+    let old_password = data.old_password;
+    let new_password = data.new_password;
 
     let user = Entity::find()
         .filter(
             Condition::all()
-                .add(Column::Id.eq(id))
+                .add(Column::Id.eq(id.clone()))
                 .add(Column::Password.eq(old_password)),
         )
         .one(conn)
@@ -700,12 +714,23 @@ pub async fn edit(
         .unwrap();
 
     if let None = user {
-        return (StatusCode::NOT_FOUND, "输入正确的原密码".to_string());
+        let resp = PasswordResponse {
+            id: None,
+            msg: "密码错误".to_string(),
+        };
+
+        return (StatusCode::NOT_FOUND, Json(resp));
     } else {
         let mut update_user: crate::db::user::ActiveModel = user.unwrap().into();
         update_user.password = Set(new_password);
         update_user.update(conn).await.unwrap();
-        return (StatusCode::OK, "修改成功".to_string());
+
+        let resp = PasswordResponse {
+            id: Some(id.parse().unwrap()),
+            msg: "修改成功".to_string(),
+        };
+
+        return (StatusCode::OK, Json(resp));
     }
 }
 

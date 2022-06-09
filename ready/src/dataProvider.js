@@ -63,16 +63,26 @@ export default {
     }));
   },
 
-  update: (resource, params) =>
-    httpClient(`${apiUrl}/${resource}/${params.id}`, {
+  update: (resource, params) => {
+    let data = {
+      old_password: params.data.old_password.toString(),
+      new_password: params.data.new_password.toString(),
+    };
+    return httpClient(`${apiUrl}/${resource}/${params.id}`, {
       method: 'PUT',
       body: JSON.stringify(params.data),
-    }).then(({ json }) => {
-      {
-        console.log(json);
-        return { data: json };
-      }
-    }),
+    })
+      .then(({ json }) => {
+        {
+          return { data: json };
+        }
+      })
+      .catch((error) => {
+        return new Promise(function (resolve, reject) {
+          reject({ message: '原密码错误，请确认输入的密码' });
+        });
+      });
+  },
 
   getOne: (resource, params) =>
     httpClient(`${apiUrl}/${resource}/${params.id}`).then(({ json }) => ({
@@ -89,7 +99,6 @@ export default {
 
     const url = `${apiUrl}/permissions`;
     return httpClient(url, options).then(({ json }) => {
-      console.log(json);
       return {
         data: json,
       };

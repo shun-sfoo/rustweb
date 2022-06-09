@@ -48,15 +48,23 @@ const downloadFile = (record) => {
   console.log(record);
 };
 
-export const StoreList = () => (
-  <List filters={postFilters} actions={<ListActions />}>
-    <Datagrid bulkActionButtons={<FileBulkActionButtons />}>
-      <FileField source="location" title="name" label="文件名称" />
-      <MyDateField source="uploadTime" label="上传时间" />
-      <TextField source="operator" label="操作者" />
-    </Datagrid>
-  </List>
-);
+export const StoreList = () => {
+  let id = localStorage.getItem('id');
+
+  return (
+    <List
+      filters={postFilters}
+      empty={false}
+      actions={id === '1' && <ListActions />}
+    >
+      <Datagrid bulkActionButtons={id === '1' && <FileBulkActionButtons />}>
+        <FileField source="location" title="name" label="文件名称" />
+        <MyDateField source="uploadTime" label="上传时间" />
+        <TextField source="operator" label="操作者" />
+      </Datagrid>
+    </List>
+  );
+};
 
 const MyDateField = ({ source }) => {
   const record = useRecordContext();
