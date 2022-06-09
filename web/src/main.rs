@@ -5,7 +5,10 @@ use axum::{
     Extension, Router,
 };
 use sea_orm::Database;
-use service::{delete_file, download_file, list, login, me, register, upload, users};
+use service::{
+    delete_file, delete_store, download_file, edit, get_one, get_permission, list, login, me,
+    register, store_upload, stores, upload, users,
+};
 use tower_http::cors::CorsLayer;
 
 mod db;
@@ -28,6 +31,7 @@ async fn main() {
 
     let _ = crate::db::create_user_table(&conn).await;
     let _ = crate::db::create_file_table(&conn).await;
+    let _ = crate::db::create_store_table(&conn).await;
 
     let cors = CorsLayer::permissive();
     // allow `GET` and `POST` when accessing the resource
@@ -40,12 +44,18 @@ async fn main() {
     //TODO upload download
     let app = Router::new()
         .route("/register", post(register))
-        .route("/login", post(login))
+        .route("/login", get(login))
         .route("/me", get(me))
-        .route("/files", get(list).delete(delete_file))
+        .route("/files", get(list).delete(delete_file).post(upload))
         .route("/clones", get(list).delete(delete_file))
         .route("/upload", post(upload))
-        .route("/users", get(users))
+        .route("/users", get(users).put(edit))
+        .route("/users/:id", get(get_one))
+        .route("/permissions", get(get_permission))
+        .route(
+            "/stores",
+            get(stores).delete(delete_store).post(store_upload),
+        )
         .route("/:name", get(download_file))
         .layer(Extension(conn))
         .layer(cors);

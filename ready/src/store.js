@@ -29,10 +29,6 @@ const ListActions = () => (
   </TopToolbar>
 );
 
-const DisableToolBar = () => {
-  <TopToolbar></TopToolbar>;
-};
-
 const postFilters = [
   <TextInput source="name" label="Search" alwaysOn />,
   <DateInput source="upload_begin" label="上传开始 " alwaysOn />,
@@ -52,31 +48,15 @@ const downloadFile = (record) => {
   console.log(record);
 };
 
-export const FileList = () => {
-  const id = localStorage.getItem('id');
-  console.log(id === '1');
-  if (id === '1') {
-    return (
-      <List filters={postFilters} actions={<ListActions />}>
-        <Datagrid bulkActionButtons={<FileBulkActionButtons />}>
-          <FileField source="location" title="name" label="文件名称" />
-          <MyDateField source="uploadTime" label="上传时间" />
-          <TextField source="operator" label="操作者" />
-        </Datagrid>
-      </List>
-    );
-  } else {
-    return (
-      <List filters={postFilters} action={<DisableToolBar />}>
-        <Datagrid>
-          <FileField source="location" title="name" label="文件名称" />
-          <MyDateField source="uploadTime" label="上传时间" />
-          <TextField source="operator" label="操作者" />
-        </Datagrid>
-      </List>
-    );
-  }
-};
+export const StoreList = () => (
+  <List filters={postFilters} actions={<ListActions />}>
+    <Datagrid bulkActionButtons={<FileBulkActionButtons />}>
+      <FileField source="location" title="name" label="文件名称" />
+      <MyDateField source="uploadTime" label="上传时间" />
+      <TextField source="operator" label="操作者" />
+    </Datagrid>
+  </List>
+);
 
 const MyDateField = ({ source }) => {
   const record = useRecordContext();
@@ -98,7 +78,7 @@ const MyUrlField = ({ source }) => {
   ) : null;
 };
 
-export const FileUpload = () => (
+export const StoreUpload = () => (
   <Create>
     <SimpleForm>
       <FileInput

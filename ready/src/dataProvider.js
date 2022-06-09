@@ -1,7 +1,7 @@
 import { fetchUtils } from 'react-admin';
 import { stringify } from 'query-string';
 
-const apiUrl = 'http://39.107.88.89:8081';
+const apiUrl = process.env.REACT_APP_API_URL;
 const httpClient = fetchUtils.fetchJson;
 
 export default {
@@ -15,7 +15,15 @@ export default {
     };
     const url = `${apiUrl}/${resource}?${stringify(query)}`;
 
-    return httpClient(url).then(({ headers, json }) => ({
+    let options = {};
+
+    options.user = {
+      authenticated: true,
+      // use the token from local storage
+      token: localStorage.getItem('token'),
+    };
+
+    return httpClient(url, options).then(({ headers, json }) => ({
       data: json,
       total: parseInt(headers.get('Content-Range').split('/').pop(), 10),
     }));
@@ -43,15 +51,48 @@ export default {
     return httpClient(url).then(({ json }) => ({ data: json }));
   },
 
-  create: (_, params) => {
+  create: (resource, params) => {
     let formData = new FormData();
     formData.append('file', params.data.files.rawFile);
 
-    return httpClient(`${apiUrl}/upload`, {
+    return httpClient(`${apiUrl}/${resource}`, {
       method: 'POST',
       body: formData,
     }).then(({ json }) => ({
       data: { ...params.data, id: json.id },
     }));
+  },
+
+  update: (resource, params) =>
+    httpClient(`${apiUrl}/${resource}/${params.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(params.data),
+    }).then(({ json }) => {
+      {
+        console.log(json);
+        return { data: json };
+      }
+    }),
+
+  getOne: (resource, params) =>
+    httpClient(`${apiUrl}/${resource}/${params.id}`).then(({ json }) => ({
+      data: json,
+    })),
+
+  getPermissions: () => {
+    let options = {};
+    options.user = {
+      authenticated: true,
+      // use the token from local storage
+      token: localStorage.getItem('token'),
+    };
+
+    const url = `${apiUrl}/permissions`;
+    return httpClient(url, options).then(({ json }) => {
+      console.log(json);
+      return {
+        data: json,
+      };
+    });
   },
 };
