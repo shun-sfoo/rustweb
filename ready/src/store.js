@@ -1,7 +1,6 @@
 import dayjs from 'dayjs';
 
 import {
-  Button,
   Datagrid,
   DateInput,
   List,
@@ -19,8 +18,6 @@ import {
 } from 'react-admin';
 
 import IconFileUpload from '@mui/icons-material/UploadFile';
-import LaunchIcon from '@mui/icons-material/Launch';
-import { Link } from '@mui/material';
 import { Fragment } from 'react';
 
 const ListActions = () => (
@@ -43,10 +40,6 @@ const FileBulkActionButtons = () => (
     />
   </Fragment>
 );
-
-const downloadFile = (record) => {
-  console.log(record);
-};
 
 export const StoreList = () => {
   let id = localStorage.getItem('id');
@@ -71,19 +64,6 @@ const MyDateField = ({ source }) => {
   return record
     ? dayjs(record[source] * 1000).format('YYYY-MM-DD HH:mm:ss')
     : null;
-};
-
-const MyUrlField = ({ source }) => {
-  const record = useRecordContext();
-  return record ? (
-    <Link
-      href={'http://localhost:8080/' + record[source]}
-      sx={{ textDecoration: 'none' }}
-    >
-      {record[source]}
-      <LaunchIcon sx={{ width: '0.5em', height: '0.5em', paddingLeft: 2 }} />
-    </Link>
-  ) : null;
 };
 
 export const StoreUpload = () => (

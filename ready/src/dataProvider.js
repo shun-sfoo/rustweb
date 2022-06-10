@@ -71,37 +71,15 @@ export default {
     return httpClient(`${apiUrl}/${resource}/${params.id}`, {
       method: 'PUT',
       body: JSON.stringify(params.data),
-    })
-      .then(({ json }) => {
-        {
-          return { data: json };
-        }
-      })
-      .catch((error) => {
-        return new Promise(function (resolve, reject) {
-          reject({ message: '原密码错误，请确认输入的密码' });
-        });
-      });
+    }).then(({ json }) => {
+      {
+        return { data: json };
+      }
+    });
   },
 
   getOne: (resource, params) =>
     httpClient(`${apiUrl}/${resource}/${params.id}`).then(({ json }) => ({
       data: json,
     })),
-
-  getPermissions: () => {
-    let options = {};
-    options.user = {
-      authenticated: true,
-      // use the token from local storage
-      token: localStorage.getItem('token'),
-    };
-
-    const url = `${apiUrl}/permissions`;
-    return httpClient(url, options).then(({ json }) => {
-      return {
-        data: json,
-      };
-    });
-  },
 };

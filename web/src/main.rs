@@ -1,13 +1,10 @@
 use std::{env, net::SocketAddr};
 
-use axum::{
-    routing::{delete, get, post},
-    Extension, Router,
-};
+use axum::{routing::get, Extension, Router};
 use sea_orm::Database;
 use service::{
-    delete_file, delete_store, download_file, edit, get_one, get_permission, list, login, me,
-    register, store_upload, stores, upload, users,
+    delete_file, delete_store, download_file, edit, get_one, list, login, store_download_file,
+    store_upload, stores, upload, users,
 };
 use tower_http::cors::CorsLayer;
 
@@ -41,22 +38,17 @@ async fn main() {
     // .allow_origin(Any)
     // .allow_headers(Any);
 
-    //TODO upload download
     let app = Router::new()
-        .route("/register", post(register))
         .route("/login", get(login))
-        .route("/me", get(me))
         .route("/files", get(list).delete(delete_file).post(upload))
-        .route("/clones", get(list).delete(delete_file))
-        .route("/upload", post(upload))
-        .route("/users", get(users))
-        .route("/users/:id", get(get_one).put(edit))
-        .route("/permissions", get(get_permission))
         .route(
             "/stores",
             get(stores).delete(delete_store).post(store_upload),
         )
-        .route("/:name", get(download_file))
+        .route("/users", get(users))
+        .route("/users/:id", get(get_one).put(edit))
+        .route("/stores/:name", get(store_download_file))
+        .route("/files/:name", get(download_file))
         .layer(Extension(conn))
         .layer(cors);
 

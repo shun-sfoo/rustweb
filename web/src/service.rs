@@ -37,6 +37,7 @@ pub struct UserResponse {
 #[derive(Serialize, Debug)]
 pub struct FileUploadResponse {
     id: Option<i32>,
+    message: String,
 }
 
 // http://localhost:8080/files?filter={"name":"1","upload_begin":"2022-06-16"}&range=[0,9]&sort=["id","ASC"]
@@ -145,7 +146,7 @@ pub async fn register(
     }))
 }
 
-async fn oldLogin(
+async fn old_login(
     Json(data): Json<HashMap<String, String>>,
     Extension(ref conn): Extension<DbConn>,
 ) -> Result<Json<UserResponse>, &'static str> {
@@ -178,10 +179,16 @@ async fn oldLogin(
     Err("No user")
 }
 
+#[derive(Serialize, Debug)]
+pub struct LoginResponse {
+    user: Option<User>,
+    message: String,
+}
+
 pub async fn login(
     Query(data): Query<HashMap<String, String>>,
     Extension(ref conn): Extension<DbConn>,
-) -> Result<Json<UserResponse>, &'static str> {
+) -> impl IntoResponse {
     debug!(?data);
 
     use crate::db::user::Column;
@@ -200,15 +207,25 @@ pub async fn login(
         .unwrap();
 
     if let Some(user) = user {
-        return Ok(Json(UserResponse {
-            user: User {
-                id: user.id,
-                name: user.name.clone(),
-                token: Some(Claims::new(user.id, user.name).generate()),
-            },
-        }));
+        return (
+            StatusCode::OK,
+            Json(LoginResponse {
+                message: "登录成功".to_string(),
+                user: Some(User {
+                    id: user.id,
+                    name: user.name.clone(),
+                    token: Some(Claims::new(user.id, user.name).generate()),
+                }),
+            }),
+        );
     };
-    Err("No user")
+
+    let resp = LoginResponse {
+        user: None,
+        message: "登录失败，确认输入的帐号密码".to_string(),
+    };
+
+    (StatusCode::NOT_FOUND, Json(resp))
 }
 
 pub async fn users(claims: Claims, Extension(ref conn): Extension<DbConn>) -> impl IntoResponse {
@@ -507,7 +524,7 @@ pub async fn upload(
     // claims: Claims,
     mut multipart: Multipart,
     Extension(ref conn): Extension<DbConn>,
-) -> Json<FileUploadResponse> {
+) -> impl IntoResponse {
     // let id = claims.id;
     if let Some(field) = multipart.next_field().await.unwrap() {
         debug!(?field);
@@ -517,9 +534,11 @@ pub async fn upload(
         debug!(?name);
         // debug!(?size);
 
+        use crate::db::file::ActiveModel;
         use crate::db::file::Column;
+        use crate::db::file::Entity;
 
-        let res = crate::db::file::Entity::find()
+        let res = Entity::find()
             .filter(
                 Condition::all()
                     .add(Column::Name.eq(name.clone()))
@@ -532,42 +551,55 @@ pub async fn upload(
         if let None = res {
             let now = get_epoch();
             let home = env::var("HOME").unwrap();
-            let location = env::var("FILE_PATH").unwrap();
-            let location = format!("{}/{}/{}", home, location, name.clone());
-            let mut file = std::fs::File::create(location).unwrap();
+            let file_path = env::var("FILE_PATH").unwrap();
+            let store_path = format!("{}/{}/{}", home, file_path, name.clone());
+            let mut file = std::fs::File::create(&store_path).unwrap();
             let _result = file.write_all(&field.bytes().await.unwrap());
 
             let ip_addr = env::var("IP_ADDR").unwrap();
 
-            let model = crate::db::file::ActiveModel {
+            let model = ActiveModel {
                 name: Set(name.clone()),
                 size: Set(0),
                 is_delete: Set(false),
                 operator: Set("1".to_string()),
-                location: Set(format!("{}/{}", ip_addr, name)),
+                location: Set(format!("{}/{}", ip_addr, format!("{}/{}", file_path, name))),
                 upload_time: Set(now),
                 ..Default::default()
             };
 
-            let result = crate::db::file::Entity::insert(model)
-                .exec(conn)
-                .await
-                .unwrap();
+            let result = Entity::insert(model).exec(conn).await.unwrap();
 
-            return Json(FileUploadResponse {
+            let resp = FileUploadResponse {
                 id: Some(result.last_insert_id),
-            });
+                message: "上传成功".to_string(),
+            };
+
+            return (StatusCode::CREATED, Json(resp));
+        } else {
+            let error_msg = format!("文件:{} 已存在,修改文件名后再上传", name);
+            let resp = FileUploadResponse {
+                id: None,
+                message: error_msg.to_string(),
+            };
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(resp));
         }
     }
 
-    return Json(FileUploadResponse { id: None });
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(FileUploadResponse {
+            id: None,
+            message: "上传失败".to_string(),
+        }),
+    )
 }
 
 pub async fn store_upload(
     // claims: Claims,
     mut multipart: Multipart,
     Extension(ref conn): Extension<DbConn>,
-) -> Json<FileUploadResponse> {
+) -> impl IntoResponse {
     // let id = claims.id;
     if let Some(field) = multipart.next_field().await.unwrap() {
         debug!(?field);
@@ -577,9 +609,11 @@ pub async fn store_upload(
         debug!(?name);
         // debug!(?size);
 
+        use crate::db::store::ActiveModel;
         use crate::db::store::Column;
+        use crate::db::store::Entity;
 
-        let res = crate::db::store::Entity::find()
+        let res = Entity::find()
             .filter(
                 Condition::all()
                     .add(Column::Name.eq(name.clone()))
@@ -591,37 +625,50 @@ pub async fn store_upload(
 
         if let None = res {
             let home = env::var("HOME").unwrap();
-            let location = env::var("STORE_PATH").unwrap();
-            let location = format!("{}/{}/{}", home, location, name.clone());
-            let mut file = std::fs::File::create(location).unwrap();
+            let file_path = env::var("STORE_PATH").unwrap();
+            let store_path = format!("{}/{}/{}", home, file_path, name.clone());
+            let mut file = std::fs::File::create(&store_path).unwrap();
             let _result = file.write_all(&field.bytes().await.unwrap());
 
             let ip_addr = env::var("IP_ADDR").unwrap();
 
             let now = get_epoch();
 
-            let model = crate::db::store::ActiveModel {
+            let model = ActiveModel {
                 name: Set(name.clone()),
                 size: Set(0),
                 is_delete: Set(false),
                 operator: Set("1".to_string()),
-                location: Set(format!("{}/{}", ip_addr, name)),
+                location: Set(format!("{}/{}", ip_addr, format!("{}/{}", file_path, name))),
                 upload_time: Set(now),
                 ..Default::default()
             };
 
-            let result = crate::db::store::Entity::insert(model)
-                .exec(conn)
-                .await
-                .unwrap();
+            let result = Entity::insert(model).exec(conn).await.unwrap();
 
-            return Json(FileUploadResponse {
+            let resp = FileUploadResponse {
                 id: Some(result.last_insert_id),
-            });
+                message: "上传成功".to_string(),
+            };
+
+            return (StatusCode::CREATED, Json(resp));
+        } else {
+            let error_msg = format!("文件:{} 已存在,修改文件名后再上传", name);
+            let resp = FileUploadResponse {
+                id: None,
+                message: error_msg.to_string(),
+            };
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(resp));
         }
     }
 
-    return Json(FileUploadResponse { id: None });
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(FileUploadResponse {
+            id: None,
+            message: "上传失败".to_string(),
+        }),
+    )
 }
 
 pub async fn download_file(Path(filename): Path<String>) -> impl IntoResponse {
@@ -685,7 +732,7 @@ pub struct Password {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PasswordResponse {
     id: Option<i32>,
-    msg: String,
+    message: String,
 }
 
 pub async fn edit(
@@ -698,8 +745,6 @@ pub async fn edit(
 
     debug!(?data);
 
-    // let old_password = data.get("old_password").unwrap().to_string();
-    // let new_password = data.get("new_password").unwrap().to_string();
     let old_password = data.old_password;
     let new_password = data.new_password;
 
@@ -716,7 +761,7 @@ pub async fn edit(
     if let None = user {
         let resp = PasswordResponse {
             id: None,
-            msg: "密码错误".to_string(),
+            message: "原密码输入错误，请输入正确密码".to_string(),
         };
 
         return (StatusCode::NOT_FOUND, Json(resp));
@@ -727,7 +772,7 @@ pub async fn edit(
 
         let resp = PasswordResponse {
             id: Some(id.parse().unwrap()),
-            msg: "修改成功".to_string(),
+            message: "修改成功".to_string(),
         };
 
         return (StatusCode::OK, Json(resp));
@@ -746,22 +791,5 @@ pub async fn get_one(
         id: user.id,
         name: user.name,
         token: None,
-    })
-}
-
-pub async fn get_permission(claims: Claims) -> impl IntoResponse {
-    #[derive(Serialize)]
-    struct P {
-        user: String,
-    }
-
-    if claims.id == 1 {
-        return Json(P {
-            user: "admin".to_string(),
-        });
-    }
-
-    Json(P {
-        user: "user".to_string(),
     })
 }
