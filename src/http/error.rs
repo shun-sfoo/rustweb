@@ -1,5 +1,10 @@
 use std::{borrow::Cow, collections::HashMap};
 
+use axum::{
+    http::{Response, StatusCode},
+    response::IntoResponse,
+};
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     /// Return `401 Unauthorized`
@@ -61,4 +66,17 @@ pub enum Error {
     /// for security reasons.
     #[error("an internal server error occurred")]
     Anyhow(#[from] anyhow::Error),
+}
+
+impl Error {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            Error::Unauthorized => StatusCode::UNAUTHORIZED,
+            Error::Forbidden => StatusCode::FORBIDDEN,
+            Error::NotFound => todo!(),
+            Error::UnprocessableEntity { errors } => todo!(),
+            Error::SeaOrm(_) => todo!(),
+            Error::Anyhow(_) => todo!(),
+        }
+    }
 }

@@ -1,3 +1,5 @@
+pub mod error;
+
 use std::sync::Arc;
 
 use sea_orm::DbConn;
