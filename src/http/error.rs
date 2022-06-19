@@ -1,9 +1,11 @@
 use std::{borrow::Cow, collections::HashMap};
 
 use axum::{
-    http::{Response, StatusCode},
-    response::IntoResponse,
+    http::{header::WWW_AUTHENTICATE, HeaderMap, HeaderValue, StatusCode},
+    response::{IntoResponse, Response},
+    Json,
 };
+use serde::Serialize;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -69,14 +71,85 @@ pub enum Error {
 }
 
 impl Error {
+    pub fn unprocessable_entity<K, V>(errors: impl IntoIterator<Item = (K, V)>) -> Self
+    where
+        K: Into<Cow<'static, str>>,
+        V: Into<Cow<'static, str>>,
+    {
+        let mut error_map = HashMap::new();
+
+        for (key, val) in errors {
+            error_map
+                .entry(key.into())
+                .or_insert_with(Vec::new)
+                .push(val.into());
+        }
+
+        Self::UnprocessableEntity { errors: error_map }
+    }
+
     fn status_code(&self) -> StatusCode {
         match self {
             Error::Unauthorized => StatusCode::UNAUTHORIZED,
             Error::Forbidden => StatusCode::FORBIDDEN,
             Error::NotFound => todo!(),
-            Error::UnprocessableEntity { errors } => todo!(),
-            Error::SeaOrm(_) => todo!(),
-            Error::Anyhow(_) => todo!(),
+            Error::UnprocessableEntity { .. } => StatusCode::UNPROCESSABLE_ENTITY,
+            Error::SeaOrm(_) | Error::Anyhow(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
+    }
+}
+
+/// Axum allows you to return `Result` from handler functions, but the error type
+/// also must be some sort of response type.
+///
+/// By default, the generated `Display` impl is used to return a plaintext error message
+/// to the client.
+impl IntoResponse for Error {
+    fn into_response(self) -> Response {
+        match self {
+            Error::Unauthorized => {
+                return (
+                    self.status_code(),
+                    // Include the `WWW-Authenticate` challenge required in the specification
+                    // for the `401 Unauthorized` response code:
+                    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+                    //
+                    // The Realworld spec does not specify this:
+                    // https://realworld-docs.netlify.app/docs/specs/backend-specs/error-handling
+                    //
+                    // However, at Launchbadge we try to adhere to web standards wherever possible,
+                    // if nothing else than to try to act as a vanguard of sanity on the web.
+                    [(WWW_AUTHENTICATE, HeaderValue::from_static("Token"))]
+                        .into_iter()
+                        .collect::<HeaderMap>(),
+                    self.to_string(),
+                )
+                    .into_response();
+            }
+            Error::Forbidden => todo!(),
+            Error::NotFound => todo!(),
+            Error::UnprocessableEntity { errors } => {
+                #[derive(Serialize)]
+                struct Errors {
+                    errors: HashMap<Cow<'static, str>, Vec<Cow<'static, str>>>,
+                }
+
+                return (StatusCode::UNPROCESSABLE_ENTITY, Json(Errors { errors })).into_response();
+            }
+            Error::SeaOrm(_) => {
+                // TODO: we probably want to use `tracing` instead
+                // so that this gets linked to the HTTP request by `TraceLayer`.
+                // log::error!("SeaOrm error: {:?}", e);
+            }
+            Error::Anyhow(_) => {
+                // TODO: we probably want to use `tracing` instead
+                // so that this gets linked to the HTTP request by `TraceLayer`.
+                // log::error!("Generic error: {:?}", e);
+            }
+            // Other errors get mapped normally.
+            _ => (),
+        }
+
+        (self.status_code(), self.to_string()).into_response()
     }
 }
