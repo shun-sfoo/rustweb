@@ -1,4 +1,5 @@
 pub mod error;
+pub mod extractor;
 mod users;
 
 use anyhow::Context;

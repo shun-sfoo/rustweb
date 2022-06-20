@@ -8,13 +8,13 @@ use axum::{
     routing::{get, post},
     Extension, Json, Router,
 };
-use sea_orm::Set;
+use sea_orm::{EntityTrait, Set};
 use serde::{Deserialize, Serialize};
 
 use super::ApiContext;
 
 use crate::db::users::ActiveModel as UserModel;
-use crate::db::users::Entity as userEntity;
+use crate::db::users::Entity as UserEntity;
 
 pub fn router() -> Router {
     // By having each module responsible for setting up its own routing,
@@ -53,7 +53,10 @@ async fn create_user(
         ..Default::default()
     };
 
-    
+    UserEntity::insert(insert_user)
+        .exec(&ctx.db)
+        .await
+        .map_err(|e| Error::SeaOrm(e))?;
 
     todo!()
 }
