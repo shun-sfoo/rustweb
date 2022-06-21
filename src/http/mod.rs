@@ -29,7 +29,7 @@ pub async fn serve(config: Config, db: DbConn) -> anyhow::Result<()> {
                 config: Arc::new(config),
                 db,
             }))
-            // Enables logging. Use `RUST_LOG=tower_http=debug`
+            // Enables logging. Use `RUST_LOG=tower_http=trace`
             .layer(TraceLayer::new_for_http()),
     );
 

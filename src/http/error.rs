@@ -6,6 +6,7 @@ use axum::{
     Json,
 };
 use serde::Serialize;
+use tracing::error;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -126,8 +127,6 @@ impl IntoResponse for Error {
                 )
                     .into_response();
             }
-            Error::Forbidden => todo!(),
-            Error::NotFound => todo!(),
             Error::UnprocessableEntity { errors } => {
                 #[derive(Serialize)]
                 struct Errors {
@@ -136,15 +135,11 @@ impl IntoResponse for Error {
 
                 return (StatusCode::UNPROCESSABLE_ENTITY, Json(Errors { errors })).into_response();
             }
-            Error::SeaOrm(_) => {
-                // TODO: we probably want to use `tracing` instead
-                // so that this gets linked to the HTTP request by `TraceLayer`.
-                // log::error!("SeaOrm error: {:?}", e);
+            Error::SeaOrm(ref e) => {
+                error!("SeaOrm error: {:?}", e);
             }
-            Error::Anyhow(_) => {
-                // TODO: we probably want to use `tracing` instead
-                // so that this gets linked to the HTTP request by `TraceLayer`.
-                // log::error!("Generic error: {:?}", e);
+            Error::Anyhow(ref e) => {
+                error!("Generic error: {:?}", e);
             }
             // Other errors get mapped normally.
             _ => (),

@@ -7,6 +7,7 @@ use axum::{
 use jsonwebtoken::Validation;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
+use tracing::debug;
 
 use super::{error::Error, ApiContext};
 
@@ -50,12 +51,18 @@ where
         let TypedHeader(Authorization(bearer)) =
             TypedHeader::<Authorization<Bearer>>::from_request(req)
                 .await
-                .unwrap();
+                .map_err(|e| {
+                    debug!("Authorization header is using the wrong scheme: {:?}", e);
+                    Error::Unauthorized
+                })?;
 
         let key = jsonwebtoken::DecodingKey::from_secret(ctx.config.hmac_key.as_bytes());
 
-        let token =
-            jsonwebtoken::decode::<Claims>(bearer.token(), &key, &Validation::default()).unwrap();
+        let token = jsonwebtoken::decode::<Claims>(bearer.token(), &key, &Validation::default())
+            .map_err(|e| {
+                debug!("failed to parse Authorization header: {:?}", e);
+                Error::Unauthorized
+            })?;
 
         Ok(AuthUser {
             user_id: token.claims.user_id,

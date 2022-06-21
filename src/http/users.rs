@@ -2,18 +2,21 @@ use crate::http::{Error, Result};
 use anyhow::Context;
 use argon2::{
     password_hash::{rand_core::OsRng, SaltString},
-    Argon2, PasswordHash, PasswordHasher,
+    Argon2, PasswordHash,
 };
 use axum::{
     routing::{get, post},
     Extension, Json, Router,
 };
-use sea_orm::{EntityTrait, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use serde::{Deserialize, Serialize};
+use tracing::debug;
+use uuid::Uuid;
 
-use super::ApiContext;
+use super::{extractor::AuthUser, ApiContext};
 
 use crate::db::users::ActiveModel as UserModel;
+use crate::db::users::Column as UserColumn;
 use crate::db::users::Entity as UserEntity;
 
 pub fn router() -> Router {
@@ -42,30 +45,103 @@ struct User {
     token: String,
 }
 
+#[derive(Deserialize, Default, PartialEq, Eq)]
+struct UpdateUser {
+    password: Option<String>,
+}
+
 async fn create_user(
     ctx: Extension<ApiContext>,
     Json(req): Json<UserBody<NewUser>>,
 ) -> Result<Json<UserBody<User>>> {
     let password_hash = hash_password(req.user.password).await?;
+
+    let user_id = Uuid::new_v4().to_string();
+
     let insert_user = UserModel {
-        username: Set(req.user.username),
+        username: Set(req.user.username.clone()),
         password_hash: Set(password_hash),
-        ..Default::default()
+        user_id: Set(user_id.clone()),
     };
 
-    UserEntity::insert(insert_user)
-        .exec(&ctx.db)
+    insert_user
+        .insert(&ctx.db)
         .await
         .map_err(|e| Error::SeaOrm(e))?;
 
-    todo!()
+    Ok(Json(UserBody {
+        user: User {
+            username: req.user.username,
+            token: AuthUser { user_id }.to_jwt(&ctx),
+        },
+    }))
 }
 
-async fn login_user() {}
+async fn login_user(
+    ctx: Extension<ApiContext>,
+    Json(req): Json<UserBody<NewUser>>,
+) -> Result<Json<UserBody<User>>> {
+    let user = UserEntity::find()
+        .filter(UserColumn::Username.eq(req.user.username))
+        .one(&ctx.db)
+        .await
+        .map_err(|e| {
+            debug!("find use by username error :{:?}", e);
+            Error::SeaOrm(e)
+        })?;
 
-async fn get_current_user() {}
+    if let Some(u) = user {
+        verify_password(req.user.password, u.password_hash).await?;
 
-async fn update_user() {}
+        return Ok(Json(UserBody {
+            user: User {
+                username: u.username,
+                token: AuthUser { user_id: u.user_id }.to_jwt(&ctx),
+            },
+        }));
+    }
+
+    Err(Error::unprocessable_entity([(
+        "username",
+        "does not exist",
+    )]))
+}
+
+async fn get_current_user(
+    auth_user: AuthUser,
+    ctx: Extension<ApiContext>,
+) -> Result<Json<UserBody<User>>> {
+    let user = UserEntity::find_by_id(auth_user.user_id)
+        .one(&ctx.db)
+        .await
+        .map_err(|e| {
+            debug!("find use by id error :{:?}", e);
+            Error::SeaOrm(e)
+        })?;
+
+    if let Some(u) = user {
+        return Ok(Json(UserBody {
+            user: User {
+                username: u.username,
+                token: AuthUser { user_id: u.user_id }.to_jwt(&ctx),
+            },
+        }));
+    }
+
+    Err(Error::unprocessable_entity([("user_id", "does not exist")]))
+}
+
+async fn update_user(
+    auth_user: AuthUser,
+    ctx: Extension<ApiContext>,
+    Json(req): Json<UserBody<UpdateUser>>,
+) -> Result<Json<UserBody<User>>> {
+    if req.user == UpdateUser::default() {
+        return get_current_user(auth_user, ctx).await;
+    }
+
+    todo!()
+}
 
 async fn hash_password(password: String) -> Result<String> {
     Ok(tokio::task::spawn_blocking(move || -> Result<String> {
