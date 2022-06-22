@@ -140,7 +140,33 @@ async fn update_user(
         return get_current_user(auth_user, ctx).await;
     }
 
-    todo!()
+    let password_hash = hash_password(req.user.password.unwrap()).await?;
+
+    let user = UserEntity::find_by_id(auth_user.user_id)
+        .one(&ctx.db)
+        .await
+        .map_err(|e| {
+            debug!("update user find by id error {:?}", e);
+            Error::SeaOrm(e)
+        })?;
+
+    let mut update_user: UserModel = user.unwrap().into();
+    update_user.password_hash = Set(password_hash);
+
+    let model = update_user.update(&ctx.db).await.map_err(|e| {
+        debug!("update user error {:?}", e);
+        Error::SeaOrm(e)
+    })?;
+
+    Ok(Json(UserBody {
+        user: User {
+            username: model.username,
+            token: AuthUser {
+                user_id: model.user_id,
+            }
+            .to_jwt(&ctx),
+        },
+    }))
 }
 
 async fn hash_password(password: String) -> Result<String> {
