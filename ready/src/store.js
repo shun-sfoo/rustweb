@@ -27,7 +27,7 @@ const ListActions = () => (
 );
 
 const postFilters = [
-  <TextInput source="name" label="Search" alwaysOn />,
+  <TextInput source="name" label="查询" alwaysOn />,
   <DateInput source="upload_begin" label="上传开始 " alwaysOn />,
   <DateInput source="upload_end" label="上传结束" alwaysOn />,
 ];

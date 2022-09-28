@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useMediaQuery } from '@mui/material';
 import PropTypes from 'prop-types';
 import { useLocation } from 'react-router-dom';
-import b2 from './b2.jpg';
+import b2 from './b5.jpg';
 import { ReactComponent as Logo } from './neoLogo.svg';
 
 import {
@@ -97,7 +97,7 @@ const Login = () => {
                 color: (theme) => theme.palette.grey[500],
               }}
             >
-              请登录青海灵峰药业流向系统
+              请登录青海五康流向系统
             </Box>
             <Box sx={{ padding: '0 1em 1em 1em' }}>
               <Box sx={{ marginTop: '1em' }}>
@@ -155,7 +155,7 @@ const Login = () => {
                 color: (theme) => theme.palette.grey[500],
               }}
             >
-              请登录青海灵峰药业流向系统
+              请登录青海五康流向系统
             </Box>
             <Box sx={{ padding: '0 1em 1em 1em' }}>
               <Box sx={{ marginTop: '1em' }}>
