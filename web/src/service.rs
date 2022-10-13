@@ -346,7 +346,7 @@ pub async fn list(
             id: m.id,
             name: m.name,
             upload_time: m.upload_time.to_string(),
-            operator: "admin".to_string(),
+            operator: "QHWKYY".to_string(),
             location: m.location,
             size: m.size,
         });
@@ -441,7 +441,7 @@ pub async fn stores(
             id: m.id,
             name: m.name,
             upload_time: m.upload_time.to_string(),
-            operator: "admin".to_string(),
+            operator: "QHWKYY".to_string(),
             location: m.location,
             size: m.size,
         });
